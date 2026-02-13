@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "870482339256",
+    "project_id": "aquaapp-1564f",
+    "storage_bucket": "aquaapp-1564f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:870482339256:android:c9d707c562a05a65f71b4d",
+        "android_client_info": {
+          "package_name": "com.example.aqua_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCArfVX2JKDj1qPoKeyeiuJtGOIuBNRzi0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
