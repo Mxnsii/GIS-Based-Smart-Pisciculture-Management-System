@@ -3,6 +3,7 @@ import 'gis_map_view.dart';
 import 'alerts_screen.dart';
 import 'farm_registry_screen.dart';
 import 'iot_monitoring_screen.dart';
+import 'insights_screen.dart';
 import 'login_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -22,6 +23,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     const GisMapView(),
     const FarmRegistryScreen(),
     const IotMonitoringScreen(),
+    const InsightsScreen(),
     const AlertsScreen(),
   ];
 
@@ -86,6 +88,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
           BottomNavigationBarItem(
             icon: Icon(Icons.sensors),
             label: 'IoT Monitoring',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.insights),
+            label: 'Insights',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.notifications_active),
