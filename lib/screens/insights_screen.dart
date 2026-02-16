@@ -174,11 +174,11 @@ class _InsightsScreenState extends State<InsightsScreen> {
                   if (value != null) {
                     spots.add(FlSpot(index.toDouble(), value));
                     
-                    // Format timestamp if available
+                     // Format timestamp if available
                     if (data['timestamp'] != null) {
                          Timestamp ts = data['timestamp'] as Timestamp;
                          DateTime dt = ts.toDate();
-                         timestamps.add(DateFormat('MM/dd HH:mm').format(dt));
+                         timestamps.add(DateFormat('MM/dd HH:mm:ss').format(dt));
                     } else {
                         timestamps.add('Start + $index');
                     }
@@ -196,81 +196,61 @@ class _InsightsScreenState extends State<InsightsScreen> {
                 double maxY = spots.map((e) => e.y).reduce((a, b) => a > b ? a : b);
                 
                 // Custom logic for specific metrics
-                // SIMPLIFIED: Force 0 start for anything that isn't Temperature
                 if (_selectedMetric == 'Temperature') {
-                    double range = maxY - minY;
-                    if (range == 0) range = 1;
-                    minY -= range * 0.5; // More padding for Temp
-                    maxY += range * 0.5;
+                    // Force clean integer range for better readability
+                    minY = minY.floorToDouble();
+                    maxY = maxY.ceilToDouble();
+                    if (maxY - minY < 3) {
+                         maxY = minY + 3; // Ensure at least 3 integer steps
+                    }
                 } else {
                    minY = 0; // pH and Turbidity start at 0
                    if (maxY < 10) maxY = 10;
                    if (_selectedMetric == 'pH') maxY = 14;
                 }
 
-                return Column(
-                  children: [
-                   // Debug Text to ensure we know what logic is running
-                    Text(
-                      'Debug: $_selectedMetric | Range: ${minY.toStringAsFixed(1)} - ${maxY.toStringAsFixed(1)}',
-                      style: TextStyle(fontSize: 10, color: Colors.grey),
-                    ),
-                    const SizedBox(height: 8),
-                    Expanded(
-                      child: LineChart(
-                        LineChartData(
-                          clipData: FlClipData.all(), // Prevent drawing outside
-                          gridData: FlGridData(show: true, drawVerticalLine: false),
-                          titlesData: FlTitlesData(
-                            leftTitles: AxisTitles(
-                              sideTitles: SideTitles(showTitles: true, reservedSize: 40),
-                            ),
-                            bottomTitles: AxisTitles(
-                              sideTitles: SideTitles(
-                                showTitles: true,
-                                getTitlesWidget: (value, meta) {
-                                  if (value.toInt() >= 0 && value.toInt() < timestamps.length) {
-                                      if (value.toInt() % 5 == 0) {
-                                           return Padding(
-                                             padding: const EdgeInsets.only(top: 8.0),
-                                             child: Text(
-                                               timestamps[value.toInt()].split(' ').last,
-                                               style: const TextStyle(fontSize: 10),
-                                             ),
-                                           );
-                                      }
-                                  }
-                                  return const Text('');
-                                },
-                              ),
-                            ),
-                            rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                            topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                          ),
-                          borderData: FlBorderData(show: false),
-                          minX: 0,
-                          maxX: spots.length.toDouble() > 0 ? spots.length.toDouble() - 1 : 0,
-                          minY: minY,
-                          maxY: maxY,
-                          lineBarsData: [
-                            LineChartBarData(
-                              spots: spots,
-                              isCurved: true,
-                              preventCurveOverShooting: true, // Prevent dipping below data points
-                              color: _getMetricColor(),
-                              barWidth: 3,
-                              isStrokeCapRound: true,
-                              dotData: FlDotData(show: false),
-                              belowBarData: BarAreaData(
-                                show: true,
-                                color: _getMetricColor().withOpacity(0.1),
-                              ),
-                            ),
-                          ],
+                return LineChart(
+                  LineChartData(
+                    clipData: FlClipData.all(), // Prevent drawing outside
+                    gridData: FlGridData(show: true, drawVerticalLine: false),
+                    titlesData: FlTitlesData(
+                      leftTitles: AxisTitles(
+                        sideTitles: SideTitles(
+                          showTitles: true, 
+                          reservedSize: 40,
+                          interval: 1.0, // Force integer steps
+                          getTitlesWidget: (value, meta) {
+                             return Text(value.toInt().toString(), style: const TextStyle(fontSize: 10));
+                          },
                         ),
                       ),
+                      bottomTitles: AxisTitles(
+                        sideTitles: SideTitles(showTitles: false),
+                      ),
+                      rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                      topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
                     ),
-                  ],
+                    borderData: FlBorderData(show: false),
+                    minX: 0,
+                    maxX: spots.length.toDouble() > 0 ? spots.length.toDouble() - 1 : 0,
+                    minY: minY,
+                    maxY: maxY,
+                    lineBarsData: [
+                      LineChartBarData(
+                        spots: spots,
+                        isCurved: true,
+                        preventCurveOverShooting: true, // Prevent dipping below data points
+                        color: _getMetricColor(),
+                        barWidth: 3,
+                        isStrokeCapRound: true,
+                        dotData: FlDotData(show: false),
+                        belowBarData: BarAreaData(
+                          show: true,
+                          color: _getMetricColor().withOpacity(0.1),
+                        ),
+                      ),
+                    ],
+                  ),
                 );
               },
             ),
