@@ -5,6 +5,7 @@ import 'farm_registry_screen.dart';
 import 'iot_monitoring_screen.dart';
 import 'insights_screen.dart';
 import 'login_screen.dart';
+import 'farm_details_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final String userName;
@@ -113,6 +114,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
 class DashboardHomeView extends StatelessWidget {
   const DashboardHomeView({super.key});
 
+  // Mock data for pending farms, matching GisMapView data
+  final List<Map<String, dynamic>> _pendingFarms = const [
+    {
+      "id": 2,
+      "name": "Khazan Farm (Mock)",
+      "lat": 15.5050,
+      "lng": 73.8200,
+      "status": "Pending Approval",
+      "owner": "S. Naik",
+      "location": "House No. 45, Near St. Michaels Church, Tiswadi, Goa",
+      "culture_type": "Khazan Traditional",
+      "area": "5.0 ha"
+    },
+    {
+      "id": 4,
+      "name": "New Venture Biofloc",
+      "lat": 15.4750,
+      "lng": 73.8000,
+      "status": "Pending Approval",
+      "owner": "P. Singh",
+      "location": "Plot 22, Industrial Estate, South Goa, Sector 7",
+      "culture_type": "Biofloc Tank",
+      "area": "0.5 ha"
+    },
+  ];
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -154,18 +181,16 @@ class DashboardHomeView extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Expanded(
-            child: ListView(
-              children: [
-                _buildFarmCard(
-                  name: 'Khazan Farm (Mock)',
-                  owner: 'Owner: S. Naik',
-                ),
-                const SizedBox(height: 12),
-                 _buildFarmCard(
-                  name: 'New Venture Biofloc',
-                  owner: 'Owner: P. Singh',
-                ),
-              ],
+            child: ListView.separated(
+              itemCount: _pendingFarms.length,
+              separatorBuilder: (context, index) => const SizedBox(height: 12),
+              itemBuilder: (context, index) {
+                final farm = _pendingFarms[index];
+                return _buildFarmCard(
+                  context: context,
+                  farm: farm,
+                );
+              },
             ),
           ),
         ],
@@ -214,7 +239,7 @@ class DashboardHomeView extends StatelessWidget {
     );
   }
 
-  Widget _buildFarmCard({required String name, required String owner}) {
+  Widget _buildFarmCard({required BuildContext context, required Map<String, dynamic> farm}) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -229,18 +254,25 @@ class DashboardHomeView extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                name,
+                farm['name'],
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
               const SizedBox(height: 4),
               Text(
-                owner,
+                'Owner: ${farm['owner']}',
                 style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
               ),
             ],
           ),
           ElevatedButton(
-            onPressed: () {},
+            onPressed: () {
+               Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => FarmDetailsScreen(farmData: farm),
+                ),
+              );
+            },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.green,
               foregroundColor: Colors.white,
