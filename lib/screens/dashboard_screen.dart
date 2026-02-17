@@ -7,6 +7,7 @@ import 'insights_screen.dart';
 import 'login_screen.dart';
 import 'farm_details_screen.dart';
 import '../widgets/weather_widget.dart';
+import '../widgets/custom_back_button.dart';
 
 class DashboardScreen extends StatefulWidget {
   final String userName;
@@ -33,7 +34,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     _pages = [
       DashboardHomeView(onTabChange: _onItemTapped),
-      const GisMapView(),
+      GisMapView(showBackButton: false),
       const FarmRegistryScreen(),
       const IotMonitoringScreen(),
       const InsightsScreen(),
@@ -51,6 +52,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
           'GIS Smart Pisciculture Management',
           style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
         ),
+        automaticallyImplyLeading: false,
+        leading: _selectedIndex != 0
+            ? CustomBackButton(
+                onPressed: () => _onItemTapped(0),
+              )
+            : (Navigator.canPop(context) 
+                ? CustomBackButton(onPressed: () => Navigator.pop(context)) 
+                : null),
+        leadingWidth: 80,
         actions: [
           Center(
             child: Text(

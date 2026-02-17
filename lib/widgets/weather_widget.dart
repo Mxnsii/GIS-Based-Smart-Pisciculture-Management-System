@@ -1,23 +1,95 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../services/weather_service.dart';
 
-class WeatherWidget extends StatelessWidget {
+class WeatherWidget extends StatefulWidget {
   const WeatherWidget({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    // Mock Weather Data
-    const String location = "Panjim, Goa";
-    const int temperature = 28;
-    const String condition = "Sunny";
-    const int humidity = 65;
-    const double windSpeed = 12.5;
+  State<WeatherWidget> createState() => _WeatherWidgetState();
+}
 
+class _WeatherWidgetState extends State<WeatherWidget> {
+  late Future<Map<String, dynamic>> _weatherFuture;
+  final WeatherService _weatherService = WeatherService();
+
+  @override
+  void initState() {
+    super.initState();
+    _weatherFuture = _weatherService.fetchWeather('Panjim, Goa');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _weatherFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return _buildLoadingValues();
+        } else if (snapshot.hasError) {
+          return _buildErrorView();
+        } else if (snapshot.hasData) {
+          final data = snapshot.data!;
+          final temp = (data['main']['temp'] as num).round();
+          final humidity = data['main']['humidity'];
+          final windSpeed = data['wind']['speed'];
+          final condition = data['weather'][0]['main'];
+          final location = data['name'];
+
+          return _buildWeatherCard(
+            location: location,
+            temperature: temp,
+            condition: condition,
+            humidity: humidity,
+            windSpeed: windSpeed.toDouble(),
+          );
+        }
+        return _buildErrorView();
+      },
+    );
+  }
+
+  Widget _buildLoadingValues() {
+    return Container(
+      height: 120, // Match Approx Height
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade300,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: const Center(
+        child: CircularProgressIndicator(color: Colors.white),
+      ),
+    );
+  }
+
+  Widget _buildErrorView() {
+    // Fallback to mock data if error (to keep UI looking good during dev without API key)
+    return _buildWeatherCard(
+      location: "Panjim, Goa (Offline)",
+      temperature: 28,
+      condition: "Sunny",
+      humidity: 65,
+      windSpeed: 12.5,
+      isError: true,
+    );
+  }
+
+  Widget _buildWeatherCard({
+    required String location,
+    required int temperature,
+    required String condition,
+    required int humidity,
+    required double windSpeed,
+    bool isError = false,
+  }) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Colors.blue.shade400, Colors.blue.shade800],
+          colors: isError 
+            ? [Colors.grey.shade400, Colors.grey.shade600] 
+            : [Colors.blue.shade400, Colors.blue.shade800],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -65,7 +137,7 @@ class WeatherWidget extends StatelessWidget {
           // Center: Temperature & Icon
           Row(
             children: [
-              const Icon(Icons.wb_sunny, color: Colors.yellow, size: 40),
+              Icon(_getWeatherIcon(condition), color: Colors.yellow, size: 40),
               const SizedBox(width: 12),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -120,5 +192,19 @@ class WeatherWidget extends StatelessWidget {
         ),
       ],
     );
+  }
+  
+  IconData _getWeatherIcon(String condition) {
+    switch (condition.toLowerCase()) {
+      case 'clouds':
+      case 'rain':
+      case 'drizzle':
+      case 'thunderstorm':
+        return Icons.cloud;
+      case 'clear':
+        return Icons.wb_sunny;
+      default:
+        return Icons.wb_cloudy_outlined;
+    }
   }
 }

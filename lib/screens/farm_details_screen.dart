@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'gis_map_view.dart';
+import '../widgets/custom_back_button.dart';
 
 class FarmDetailsScreen extends StatelessWidget {
   final Map<String, dynamic> farmData;
@@ -16,6 +17,11 @@ class FarmDetailsScreen extends StatelessWidget {
         foregroundColor: Colors.black,
         elevation: 0,
         centerTitle: true,
+        automaticallyImplyLeading: false,
+        leading: CustomBackButton(
+          onPressed: () => Navigator.pop(context),
+        ),
+        leadingWidth: 80,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
