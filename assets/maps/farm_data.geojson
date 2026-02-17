@@ -1,0 +1,75 @@
+{
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "Goa Smart Prawn Farm",
+                "status": "Active",
+                "id": "FRM-2024-001"
+            },
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [
+                            73.7550,
+                            15.5400
+                        ],
+                        [
+                            73.7570,
+                            15.5400
+                        ],
+                        [
+                            73.7570,
+                            15.5415
+                        ],
+                        [
+                            73.7550,
+                            15.5415
+                        ],
+                        [
+                            73.7550,
+                            15.5400
+                        ]
+                    ]
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "Khazan Traditional Farm",
+                "status": "Pending Approval",
+                "id": "FRM-2024-002"
+            },
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [
+                            73.9090,
+                            15.5090
+                        ],
+                        [
+                            73.9110,
+                            15.5090
+                        ],
+                        [
+                            73.9120,
+                            15.5110
+                        ],
+                        [
+                            73.9080,
+                            15.5110
+                        ],
+                        [
+                            73.9090,
+                            15.5090
+                        ]
+                    ]
+                ]
+            }
+        }
+    ]
+}

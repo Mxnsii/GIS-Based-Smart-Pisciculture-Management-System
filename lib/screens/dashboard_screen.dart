@@ -6,6 +6,7 @@ import 'iot_monitoring_screen.dart';
 import 'insights_screen.dart';
 import 'login_screen.dart';
 import 'farm_details_screen.dart';
+import '../widgets/weather_widget.dart';
 
 class DashboardScreen extends StatefulWidget {
   final String userName;
@@ -19,19 +20,25 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   int _selectedIndex = 0;
 
-  final List<Widget> _pages = [
-    const DashboardHomeView(),
-    const GisMapView(),
-    const FarmRegistryScreen(),
-    const IotMonitoringScreen(),
-    const InsightsScreen(),
-    const AlertsScreen(),
-  ];
-
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
     });
+  }
+
+  late final List<Widget> _pages;
+
+  @override
+  void initState() {
+    super.initState();
+    _pages = [
+      DashboardHomeView(onTabChange: _onItemTapped),
+      const GisMapView(),
+      const FarmRegistryScreen(),
+      const IotMonitoringScreen(),
+      const InsightsScreen(),
+      const AlertsScreen(),
+    ];
   }
 
   @override
@@ -112,32 +119,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
 }
 
 class DashboardHomeView extends StatelessWidget {
-  const DashboardHomeView({super.key});
+  final Function(int) onTabChange;
+
+  const DashboardHomeView({super.key, required this.onTabChange});
 
   // Mock data for pending farms, matching GisMapView data
   final List<Map<String, dynamic>> _pendingFarms = const [
-    {
-      "id": 2,
-      "name": "Khazan Farm (Mock)",
-      "lat": 15.5050,
-      "lng": 73.8200,
-      "status": "Pending Approval",
-      "owner": "S. Naik",
-      "location": "House No. 45, Near St. Michaels Church, Tiswadi, Goa",
-      "culture_type": "Khazan Traditional",
-      "area": "5.0 ha"
-    },
-    {
-      "id": 4,
-      "name": "New Venture Biofloc",
-      "lat": 15.4750,
-      "lng": 73.8000,
-      "status": "Pending Approval",
-      "owner": "P. Singh",
-      "location": "Plot 22, Industrial Estate, South Goa, Sector 7",
-      "culture_type": "Biofloc Tank",
-      "area": "0.5 ha"
-    },
+// ... [Keep pending farms list]
   ];
 
   @override
@@ -148,10 +136,13 @@ class DashboardHomeView extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+// ... [Inside DashboardHomeView build]
           const Text(
             'Authority Dashboard',
             style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
           ),
+          const SizedBox(height: 16),
+          const WeatherWidget(), // Add Weather Widget
           const SizedBox(height: 24),
           Row(
             children: [
@@ -159,81 +150,70 @@ class DashboardHomeView extends StatelessWidget {
                 title: 'Total Registered Farms',
                 value: '4',
                 color: Colors.blue,
+                onTap: () => onTabChange(2), // Index 2: Farm Registry
               ),
               const SizedBox(width: 24),
               _buildStatCard(
                 title: 'Farms in CRZ (Mock)',
                 value: '8',
                 color: Colors.red,
+                onTap: () => onTabChange(1), // Index 1: GIS Map
               ),
               const SizedBox(width: 24),
               _buildStatCard(
                 title: 'Active IoT Alerts',
                 value: '1',
                 color: Colors.orange,
+                onTap: () => onTabChange(5), // Index 5: Alerts
               ),
             ],
           ),
-          const SizedBox(height: 48),
-          const Text(
-            'Farms Pending Approval',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: ListView.separated(
-              itemCount: _pendingFarms.length,
-              separatorBuilder: (context, index) => const SizedBox(height: 12),
-              itemBuilder: (context, index) {
-                final farm = _pendingFarms[index];
-                return _buildFarmCard(
-                  context: context,
-                  farm: farm,
-                );
-              },
-            ),
-          ),
+// ...
         ],
       ),
     );
   }
 
-  Widget _buildStatCard({required String title, required String value, required Color color}) {
+  Widget _buildStatCard({required String title, required String value, required Color color, required VoidCallback onTap}) {
     return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: TextStyle(
-                color: Colors.grey.shade600,
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
               ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              value,
-              style: TextStyle(
-                color: color,
-                fontSize: 32,
-                fontWeight: FontWeight.bold,
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  color: Colors.grey.shade600,
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 12),
+              Text(
+                value,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
