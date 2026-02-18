@@ -1,17 +1,27 @@
 import 'package:flutter/material.dart';
+import 'package:fl_chart/fl_chart.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 import 'gis_map_view.dart';
 
-class FarmDetailsScreen extends StatelessWidget {
+class FarmDetailsScreen extends StatefulWidget {
   final Map<String, dynamic> farmData;
 
   const FarmDetailsScreen({super.key, required this.farmData});
 
   @override
+  State<FarmDetailsScreen> createState() => _FarmDetailsScreenState();
+}
+
+class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
+  String _selectedMetric = 'Temperature'; // Default metric
+  final List<String> _metrics = ['Temperature', 'pH', 'Turbidity'];
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF1F5F9), // Slate 100
       appBar: AppBar(
-        title: Text(farmData['name'] ?? 'Farm Details'),
+        title: Text(widget.farmData['name'] ?? 'Farm Details'),
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0,
@@ -27,8 +37,9 @@ class FarmDetailsScreen extends StatelessWidget {
             _buildSectionTitle('📍 GIS & Location'),
             _buildGisSection(context),
             const SizedBox(height: 16),
-            _buildSectionTitle('🌊 Water Quality (IoT)'),
-            _buildWaterQualitySection(),
+            // Updated Section Title
+            _buildSectionTitle('📈 Insights'),
+            _buildInsightsSection(), // Replaces _buildWaterQualitySection
             const SizedBox(height: 16),
             _buildSectionTitle('🐠 Fish Stock'),
             _buildStockSection(),
@@ -99,25 +110,25 @@ class FarmDetailsScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Farm ID: ${farmData['id'] ?? 'N/A'}',
+                    'Farm ID: ${widget.farmData['id'] ?? 'N/A'}',
                     style: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    farmData['owner'] ?? 'Unknown Owner',
+                    widget.farmData['owner'] ?? 'Unknown Owner',
                     style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
-              _buildStatusBadge(farmData['status'] ?? 'Unknown'),
+              _buildStatusBadge(widget.farmData['status'] ?? 'Unknown'),
             ],
           ),
           const Divider(height: 24),
-          _buildInfoRow(Icons.phone, farmData['contact'] ?? 'N/A'),
-          _buildInfoRow(Icons.email, farmData['email'] ?? 'N/A'),
-          _buildInfoRow(Icons.location_on, '${farmData['village']}, ${farmData['taluka']}'),
-          _buildInfoRow(Icons.landscape, 'Area: ${farmData['totalArea']} • Ponds: ${farmData['pondCount']}'),
-          _buildInfoRow(Icons.calendar_today, 'Reg: ${farmData['regDate']} • Lic: ${farmData['license']}'),
+          _buildInfoRow(Icons.phone, widget.farmData['contact'] ?? 'N/A'),
+          _buildInfoRow(Icons.email, widget.farmData['email'] ?? 'N/A'),
+          _buildInfoRow(Icons.location_on, '${widget.farmData['village']}, ${widget.farmData['taluka']}'),
+          _buildInfoRow(Icons.landscape, 'Area: ${widget.farmData['totalArea']} • Ponds: ${widget.farmData['pondCount']}'),
+          _buildInfoRow(Icons.calendar_today, 'Reg: ${widget.farmData['regDate']} • Lic: ${widget.farmData['license']}'),
         ],
       ),
     );
@@ -132,18 +143,18 @@ class FarmDetailsScreen extends StatelessWidget {
               Expanded(
                 child: Column(
                   children: [
-                    _buildDetailItem('Latitude', '${farmData['lat'] ?? 0.0}'),
-                    _buildDetailItem('Longitude', '${farmData['lng'] ?? 0.0}'),
-                    _buildDetailItem('Elevation', farmData['elevation'] ?? 'N/A'),
+                    _buildDetailItem('Latitude', '${widget.farmData['lat'] ?? 0.0}'),
+                    _buildDetailItem('Longitude', '${widget.farmData['lng'] ?? 0.0}'),
+                    _buildDetailItem('Elevation', widget.farmData['elevation'] ?? 'N/A'),
                   ],
                 ),
               ),
               Expanded(
                 child: Column(
-                   children: [
-                    _buildDetailItem('Soil Type', farmData['soilType'] ?? 'N/A'),
-                    _buildDetailItem('Zone', farmData['landCategory'] ?? 'N/A'),
-                    _buildDetailItem('Water Src', farmData['waterSource'] ?? 'N/A'),
+                  children: [
+                    _buildDetailItem('Soil Type', widget.farmData['soilType'] ?? 'N/A'),
+                    _buildDetailItem('Zone', widget.farmData['landCategory'] ?? 'N/A'),
+                    _buildDetailItem('Water Src', widget.farmData['waterSource'] ?? 'N/A'),
                   ],
                 ),
               ),
@@ -154,13 +165,13 @@ class FarmDetailsScreen extends StatelessWidget {
             width: double.infinity,
             child: ElevatedButton.icon(
               onPressed: () {
-                 if (farmData['lat'] != null && farmData['lng'] != null) {
+                 if (widget.farmData['lat'] != null && widget.farmData['lng'] != null) {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (_) => GisMapView(
-                          initialLat: farmData['lat'],
-                          initialLng: farmData['lng'],
+                          initialLat: widget.farmData['lat'],
+                          initialLng: widget.farmData['lng'],
                           initialZoom: 16,
                         ),
                       ),
@@ -181,7 +192,7 @@ class FarmDetailsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildWaterQualitySection() {
+  Widget _buildInsightsSection() {
     return _buildCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -189,79 +200,176 @@ class FarmDetailsScreen extends StatelessWidget {
            Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Last Update: ${farmData['lastUpdate'] ?? 'N/A'}',
-                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              const Text(
+                'Real-time Trends',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
+              // Metric Selector Dropdown
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 decoration: BoxDecoration(
-                  color: (farmData['riskStatus'] == 'Normal') ? Colors.green.shade100 : Colors.red.shade100,
-                  borderRadius: BorderRadius.circular(4),
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey.shade300),
                 ),
-                child: Text(
-                  farmData['riskStatus'] ?? 'Unknown',
-                  style: TextStyle(
-                    fontSize: 12, 
-                    fontWeight: FontWeight.bold,
-                    color: (farmData['riskStatus'] == 'Normal') ? Colors.green.shade800 : Colors.red.shade800,
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _selectedMetric,
+                    isDense: true,
+                    icon: const Icon(Icons.arrow_drop_down, size: 20),
+                    onChanged: (String? value) {
+                      if (value != null) {
+                        setState(() {
+                          _selectedMetric = value;
+                        });
+                      }
+                    },
+                    items: _metrics.map<DropdownMenuItem<String>>((String value) {
+                      return DropdownMenuItem<String>(
+                        value: value,
+                        child: Text(value, style: const TextStyle(fontSize: 14)),
+                      );
+                    }).toList(),
                   ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 16),
-          GridView.count(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: 3,
-            crossAxisSpacing: 8,
-            mainAxisSpacing: 8,
-            childAspectRatio: 1.1,
-            children: [
-              _buildSensorTile('pH', farmData['ph']?.toString() ?? '-', Colors.blue),
-              _buildSensorTile('Temp', '${farmData['temp']}°C', Colors.orange),
-              _buildSensorTile('DO', farmData['do'] ?? '-', Colors.lightBlue),
-              _buildSensorTile('Salinity', farmData['salinity'] ?? '-', Colors.teal),
-              _buildSensorTile('Turbidity', farmData['turbidity'] ?? '-', Colors.brown),
-              _buildSensorTile('Alarms', '${farmData['alarmCount'] ?? 0}', Colors.red),
-            ],
+          AspectRatio(
+            aspectRatio: 3.0, // Made graph smaller (shorter)
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('water_parameters')
+                  .orderBy('timestamp', descending: false)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                if (snapshot.hasError) {
+                  return Center(child: Text('Error: ${snapshot.error}'));
+                }
+
+                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                  return const Center(child: Text('No data available'));
+                }
+
+                List<FlSpot> spots = [];
+                
+                int index = 0;
+                for (var doc in snapshot.data!.docs) {
+                  final data = doc.data() as Map<String, dynamic>;
+                   double? value;
+                   if (_selectedMetric == 'Temperature') {
+                     value = (data['temperature'] as num?)?.toDouble();
+                   } else if (_selectedMetric == 'pH') {
+                     value = (data['pH'] as num?)?.toDouble();
+                   } else if (_selectedMetric == 'Turbidity') {
+                     value = (data['turbidity'] as num?)?.toDouble();
+                   }
+                  
+                  if (value != null) {
+                    spots.add(FlSpot(index.toDouble(), value));
+                    index++;
+                  }
+                }
+                
+                if (spots.isEmpty) {
+                   return const Center(child: Text('No valid data for selected metric'));
+                }
+
+                double minY = spots.map((e) => e.y).reduce((a, b) => a < b ? a : b);
+                double maxY = spots.map((e) => e.y).reduce((a, b) => a > b ? a : b);
+                
+                if (_selectedMetric == 'Temperature') {
+                    // Force clean integer range logic
+                    minY = minY.floorToDouble();
+                    maxY = maxY.ceilToDouble();
+                    if (maxY - minY < 3) {
+                         maxY = minY + 3; 
+                    }
+                } else {
+                   minY = 0; 
+                   if (maxY < 10) maxY = 10;
+                   if (_selectedMetric == 'pH') maxY = 14;
+                }
+
+                return LineChart(
+                  LineChartData(
+                    clipData: FlClipData.all(),
+                    gridData: FlGridData(show: true, drawVerticalLine: false),
+                    titlesData: FlTitlesData(
+                      leftTitles: AxisTitles(
+                        sideTitles: SideTitles(
+                          showTitles: true, 
+                          reservedSize: 40,
+                          interval: 1.0, 
+                          getTitlesWidget: (value, meta) {
+                             return Text(value.toInt().toString(), style: const TextStyle(fontSize: 10));
+                          },
+                        ),
+                      ),
+                      bottomTitles: AxisTitles(
+                        sideTitles: SideTitles(showTitles: false), // Hidden per request
+                      ),
+                      rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                      topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    ),
+                    borderData: FlBorderData(show: false),
+                    minX: 0,
+                    maxX: spots.length.toDouble() > 0 ? spots.length.toDouble() - 1 : 0,
+                    minY: minY,
+                    maxY: maxY,
+                    lineBarsData: [
+                      LineChartBarData(
+                        spots: spots,
+                        isCurved: true,
+                        preventCurveOverShooting: true,
+                        color: _getMetricColor(),
+                        barWidth: 3,
+                        isStrokeCapRound: true,
+                        dotData: FlDotData(show: false),
+                        belowBarData: BarAreaData(
+                          show: true,
+                          color: _getMetricColor().withOpacity(0.1),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildSensorTile(String label, String value, Color color) {
-    return Container(
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(value, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: color.withOpacity(0.8))),
-          const SizedBox(height: 4),
-          Text(label, style: TextStyle(fontSize: 12, color: color)),
-        ],
-      ),
-    );
+  Color _getMetricColor() {
+    switch (_selectedMetric) {
+      case 'Temperature': return Colors.orange;
+      case 'pH': return Colors.green;
+      case 'Turbidity': return Colors.brown;
+      default: return Colors.blue;
+    }
   }
+
+
 
   Widget _buildStockSection() {
     return _buildCard(
       child: Column(
         children: [
-          _buildDetailRow('Species', farmData['species'] ?? 'N/A'),
-          _buildDetailRow('Quantity', farmData['quantity'] ?? 'N/A'),
+          _buildDetailRow('Species', widget.farmData['species'] ?? 'N/A'),
+          _buildDetailRow('Quantity', widget.farmData['quantity'] ?? 'N/A'),
           const Divider(),
-          _buildDetailRow('Stock Date', farmData['stockDate'] ?? 'N/A'),
-          _buildDetailRow('Harvest Date', farmData['harvestDate'] ?? 'N/A'),
+          _buildDetailRow('Stock Date', widget.farmData['stockDate'] ?? 'N/A'),
+          _buildDetailRow('Harvest Date', widget.farmData['harvestDate'] ?? 'N/A'),
           const Divider(),
-          _buildDetailRow('Feed Type', farmData['feedType'] ?? 'N/A'),
-          _buildDetailRow('Growth Stage', farmData['growthStage'] ?? 'N/A'),
+          _buildDetailRow('Feed Type', widget.farmData['feedType'] ?? 'N/A'),
+          _buildDetailRow('Growth Stage', widget.farmData['growthStage'] ?? 'N/A'),
         ],
       ),
     );
@@ -271,9 +379,9 @@ class FarmDetailsScreen extends StatelessWidget {
     return _buildCard(
       child: Column(
         children: [
-          _buildAlertRow(Icons.coronavirus, 'Disease Alerts', farmData['diseaseAlerts'] ?? 'None', Colors.red),
-          _buildAlertRow(Icons.flood, 'Flood History', farmData['floodAlertHistory'] ?? 'None', Colors.orange),
-          _buildAlertRow(Icons.factory, 'Pollution Score', farmData['pollutionScore'] ?? 'N/A', Colors.grey),
+          _buildAlertRow(Icons.coronavirus, 'Disease Alerts', widget.farmData['diseaseAlerts'] ?? 'None', Colors.red),
+          _buildAlertRow(Icons.flood, 'Flood History', widget.farmData['floodAlertHistory'] ?? 'None', Colors.orange),
+          _buildAlertRow(Icons.factory, 'Pollution Score', widget.farmData['pollutionScore'] ?? 'N/A', Colors.grey),
         ],
       ),
     );
@@ -304,18 +412,18 @@ class FarmDetailsScreen extends StatelessWidget {
     return _buildCard(
       child: Column(
         children: [
-          _buildDetailRow('Scheme Support', farmData['scheme'] ?? 'N/A'),
-          _buildDetailRow('Subsidy Info', farmData['subsidyStatus'] ?? 'N/A'),
-          _buildDetailRow('Insurance', farmData['insuranceDetails'] ?? 'N/A'),
+          _buildDetailRow('Scheme Support', widget.farmData['scheme'] ?? 'N/A'),
+          _buildDetailRow('Subsidy Info', widget.farmData['subsidyStatus'] ?? 'N/A'),
+          _buildDetailRow('Insurance', widget.farmData['insuranceDetails'] ?? 'N/A'),
           const Divider(),
-          _buildDetailRow('Est. Revenue', farmData['revenueEst'] ?? 'N/A', isBold: true),
+          _buildDetailRow('Est. Revenue', widget.farmData['revenueEst'] ?? 'N/A', isBold: true),
         ],
       ),
     );
   }
 
   Widget _buildDocumentsSection() {
-    final docs = farmData['docs'] as Map<String, dynamic>? ?? {};
+    final docs = widget.farmData['docs'] as Map<String, dynamic>? ?? {};
     if (docs.isEmpty) return const Text('No documents found.');
     
     return _buildCard(
@@ -352,8 +460,8 @@ class FarmDetailsScreen extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _buildStatCircle('Productivity', farmData['productivity'] ?? '-'),
-          _buildStatCircle('Sustainability', farmData['sustainabilityScore'] ?? '-'),
+          _buildStatCircle('Productivity', widget.farmData['productivity'] ?? '-'),
+          _buildStatCircle('Sustainability', widget.farmData['sustainabilityScore'] ?? '-'),
         ],
       ),
     );
@@ -383,14 +491,14 @@ class FarmDetailsScreen extends StatelessWidget {
     return _buildCard(
       child: Column(
         children: [
-          _buildDetailRow('Last Inspector', farmData['inspector'] ?? 'N/A'),
-          _buildDetailRow('Inspection Date', farmData['inspectionDate'] ?? 'N/A'),
+          _buildDetailRow('Last Inspector', widget.farmData['inspector'] ?? 'N/A'),
+          _buildDetailRow('Inspection Date', widget.farmData['inspectionDate'] ?? 'N/A'),
           const SizedBox(height: 8),
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(12),
             color: Colors.yellow.shade50,
-            child: Text('Remarks: ${farmData['remarks'] ?? 'None'}', style: TextStyle(fontStyle: FontStyle.italic, color: Colors.brown.shade700)),
+            child: Text('Remarks: ${widget.farmData['remarks'] ?? 'None'}', style: TextStyle(fontStyle: FontStyle.italic, color: Colors.brown.shade700)),
           ),
         ],
       ),

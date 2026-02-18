@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 import 'gis_map_view.dart';
-import 'alerts_screen.dart';
 import 'farm_registry_screen.dart';
-import 'iot_monitoring_screen.dart';
-import 'insights_screen.dart';
 import 'login_screen.dart';
 import 'farm_details_screen.dart';
 import '../widgets/weather_widget.dart';
@@ -35,9 +32,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       DashboardHomeView(onTabChange: _onItemTapped),
       const GisMapView(),
       const FarmRegistryScreen(),
-      const IotMonitoringScreen(),
-      const InsightsScreen(),
-      const AlertsScreen(),
     ];
   }
 
@@ -93,18 +87,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             icon: Icon(Icons.list_alt),
             label: 'Farm Registry',
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.sensors),
-            label: 'IoT Monitoring',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.insights),
-            label: 'Insights',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.notifications_active),
-            label: 'Alerts',
-          ),
         ],
         currentIndex: _selectedIndex,
         selectedItemColor: Colors.blue,
@@ -158,13 +140,6 @@ class DashboardHomeView extends StatelessWidget {
                 value: '8',
                 color: Colors.red,
                 onTap: () => onTabChange(1), // Index 1: GIS Map
-              ),
-              const SizedBox(width: 24),
-              _buildStatCard(
-                title: 'Active IoT Alerts',
-                value: '1',
-                color: Colors.orange,
-                onTap: () => onTabChange(5), // Index 5: Alerts
               ),
             ],
           ),
