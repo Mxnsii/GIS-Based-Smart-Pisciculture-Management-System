@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'dart:math' as math;
 import 'farm_details_screen.dart';
+import '../widgets/custom_back_button.dart';
 import '../services/gis_service.dart'; // Import the service
 
 class GisMapView extends StatefulWidget {
@@ -16,8 +17,12 @@ class GisMapView extends StatefulWidget {
     this.initialLat, 
     this.initialLng, 
     this.initialZoom = 12.0,
+
     this.farms,
+    this.showBackButton = true,
   });
+
+  final bool showBackButton;
 
   @override
   State<GisMapView> createState() => _GisMapViewState();
@@ -423,19 +428,13 @@ class _GisMapViewState extends State<GisMapView> {
 
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: const Text('GIS Map View'),
         // Only show back button if pushed (which happens when selecting coordinates)
         leadingWidth: 80, // Allow more width for text
-        leading: Navigator.canPop(context) 
-          ? TextButton(
+        leading: widget.showBackButton && Navigator.canPop(context) 
+          ? CustomBackButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text(
-                'BACK',
-                style: TextStyle(
-                  color: Colors.green, // Ensure visibility
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
             )
           : null, // Default logic when used in BottomNavBar
       ),

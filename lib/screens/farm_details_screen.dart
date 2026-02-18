@@ -3,6 +3,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'gis_map_view.dart';
+import '../widgets/custom_back_button.dart';
 
 class FarmDetailsScreen extends StatefulWidget {
   final Map<String, dynamic> farmData;
@@ -26,6 +27,11 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
         foregroundColor: Colors.black,
         elevation: 0,
         centerTitle: true,
+        automaticallyImplyLeading: false,
+        leading: CustomBackButton(
+          onPressed: () => Navigator.pop(context),
+        ),
+        leadingWidth: 80,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
