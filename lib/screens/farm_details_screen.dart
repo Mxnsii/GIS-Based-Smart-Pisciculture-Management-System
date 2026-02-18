@@ -198,6 +198,15 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
     );
   }
 
+  String _getMetricUnit() {
+    switch (_selectedMetric) {
+      case 'Temperature': return '°C';
+      case 'pH': return '';
+      case 'Turbidity': return 'NTU';
+      default: return '';
+    }
+  }
+
   Widget _buildInsightsSection() {
     return _buildCard(
       child: Column(
@@ -206,7 +215,7 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
            Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+               const Text(
                 'Real-time Trends',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
@@ -242,12 +251,25 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
             ],
           ),
           const SizedBox(height: 16),
+          Center(
+            child: Text(
+              '${_selectedMetric.toUpperCase()} ${_getMetricUnit().isNotEmpty ? '(${_getMetricUnit()})' : ''}',
+              style: TextStyle(
+                fontSize: 18, 
+                fontWeight: FontWeight.bold, 
+                letterSpacing: 1.2,
+                color: Colors.grey.shade800,
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
           AspectRatio(
-            aspectRatio: 3.0, // Made graph smaller (shorter)
+            aspectRatio: 2.5, // Wider aspect ratio for better detail
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('water_parameters')
                   .orderBy('timestamp', descending: false)
+                  .limit(20) // Limit to relevant recent data for clarity
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -262,87 +284,198 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
                   return const Center(child: Text('No data available'));
                 }
 
-                List<FlSpot> spots = [];
-                
-                int index = 0;
+                // 1. Process Data
+                List<Map<String, dynamic>> chartData = [];
                 for (var doc in snapshot.data!.docs) {
                   final data = doc.data() as Map<String, dynamic>;
-                   double? value;
-                   if (_selectedMetric == 'Temperature') {
-                     value = (data['temperature'] as num?)?.toDouble();
-                   } else if (_selectedMetric == 'pH') {
-                     value = (data['pH'] as num?)?.toDouble();
-                   } else if (_selectedMetric == 'Turbidity') {
-                     value = (data['turbidity'] as num?)?.toDouble();
-                   }
-                  
+                  double? value;
+                  if (_selectedMetric == 'Temperature') {
+                    value = (data['temperature'] as num?)?.toDouble();
+                  } else if (_selectedMetric == 'pH') {
+                    value = (data['pH'] as num?)?.toDouble();
+                  } else if (_selectedMetric == 'Turbidity') {
+                    value = (data['turbidity'] as num?)?.toDouble();
+                  }
+
                   if (value != null) {
-                    spots.add(FlSpot(index.toDouble(), value));
-                    index++;
+                    DateTime? date;
+                    if (data['timestamp'] != null) {
+                      if (data['timestamp'] is Timestamp) {
+                         date = (data['timestamp'] as Timestamp).toDate();
+                      } else if (data['timestamp'] is String) {
+                         date = DateTime.tryParse(data['timestamp']);
+                      }
+                    }
+                    chartData.add({
+                      'value': value,
+                      'date': date ?? DateTime.now(),
+                    });
                   }
                 }
-                
-                if (spots.isEmpty) {
+
+                if (chartData.isEmpty) {
                    return const Center(child: Text('No valid data for selected metric'));
+                }
+
+                // 2. Prepare Spots and Min/Max
+                List<FlSpot> spots = [];
+                for (int i = 0; i < chartData.length; i++) {
+                   spots.add(FlSpot(i.toDouble(), chartData[i]['value']));
                 }
 
                 double minY = spots.map((e) => e.y).reduce((a, b) => a < b ? a : b);
                 double maxY = spots.map((e) => e.y).reduce((a, b) => a > b ? a : b);
                 
-                if (_selectedMetric == 'Temperature') {
-                    // Force clean integer range logic
-                    minY = minY.floorToDouble();
-                    maxY = maxY.ceilToDouble();
-                    if (maxY - minY < 3) {
-                         maxY = minY + 3; 
-                    }
-                } else {
-                   minY = 0; 
-                   if (maxY < 10) maxY = 10;
-                   if (_selectedMetric == 'pH') maxY = 14;
-                }
+                // Add padding to Y axis
+                double yRange = maxY - minY;
+                if (yRange == 0) yRange = 1;
+                minY -= yRange * 0.2;
+                maxY += yRange * 0.2;
+
+                // Color Setup
+                Color primaryColor = _getMetricColor();
+                List<Color> gradientColors = [
+                  primaryColor,
+                  primaryColor.withOpacity(0.5),
+                ];
 
                 return LineChart(
                   LineChartData(
-                    clipData: FlClipData.all(),
-                    gridData: FlGridData(show: true, drawVerticalLine: false),
+                    gridData: FlGridData(
+                      show: true,
+                      drawVerticalLine: false,
+                      horizontalInterval: yRange / 5, // Approx 5 lines
+                      getDrawingHorizontalLine: (value) {
+                        return FlLine(
+                          color: Colors.grey.shade200,
+                          strokeWidth: 1,
+                        );
+                      },
+                    ),
                     titlesData: FlTitlesData(
-                      leftTitles: AxisTitles(
+                      show: true,
+                      rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                      topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                      bottomTitles: AxisTitles(
                         sideTitles: SideTitles(
-                          showTitles: true, 
-                          reservedSize: 40,
-                          interval: 1.0, 
+                          showTitles: true,
+                          reservedSize: 30,
+                          interval: (spots.length / 5).ceilToDouble(), // Dynamic interval
                           getTitlesWidget: (value, meta) {
-                             return Text(value.toInt().toString(), style: const TextStyle(fontSize: 10));
+                            int index = value.toInt();
+                            if (index >= 0 && index < chartData.length) {
+                              DateTime date = chartData[index]['date'];
+                              return Padding(
+                                padding: const EdgeInsets.only(top: 8.0),
+                                child: Text(
+                                  DateFormat('MM/dd').format(date), // e.g. 10/24
+                                  style: TextStyle(
+                                    color: Colors.grey.shade600,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              );
+                            }
+                            return const SizedBox.shrink();
                           },
                         ),
                       ),
-                      bottomTitles: AxisTitles(
-                        sideTitles: SideTitles(showTitles: false), // Hidden per request
+                      leftTitles: AxisTitles(
+                        sideTitles: SideTitles(
+                          showTitles: true,
+                          interval: yRange / 5, // Match grid
+                          getTitlesWidget: (value, meta) {
+                            return Text(
+                              value.toStringAsFixed(1),
+                              style: TextStyle(
+                                color: Colors.grey.shade600,
+                                fontSize: 10,
+                              ),
+                              textAlign: TextAlign.left,
+                            );
+                          },
+                          reservedSize: 35,
+                        ),
                       ),
-                      rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                      topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
                     ),
-                    borderData: FlBorderData(show: false),
+                    borderData: FlBorderData(
+                      show: false,
+                    ),
                     minX: 0,
-                    maxX: spots.length.toDouble() > 0 ? spots.length.toDouble() - 1 : 0,
+                    maxX: (spots.length - 1).toDouble(),
                     minY: minY,
                     maxY: maxY,
                     lineBarsData: [
                       LineChartBarData(
                         spots: spots,
                         isCurved: true,
+                        curveSmoothness: 0.35,
                         preventCurveOverShooting: true,
-                        color: _getMetricColor(),
+                        color: primaryColor,
                         barWidth: 3,
                         isStrokeCapRound: true,
-                        dotData: FlDotData(show: false),
+                        dotData: FlDotData(
+                          show: true,
+                          getDotPainter: (spot, percent, barData, index) {
+                            return FlDotCirclePainter(
+                              radius: 4,
+                              color: Colors.white,
+                              strokeWidth: 2,
+                              strokeColor: primaryColor,
+                            );
+                          },
+                        ),
                         belowBarData: BarAreaData(
                           show: true,
-                          color: _getMetricColor().withOpacity(0.1),
+                          gradient: LinearGradient(
+                            colors: [
+                              primaryColor.withOpacity(0.3),
+                              primaryColor.withOpacity(0.0),
+                            ],
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                          ),
                         ),
                       ),
                     ],
+                    lineTouchData: LineTouchData(
+                      handleBuiltInTouches: true,
+                      touchTooltipData: LineTouchTooltipData(
+                        getTooltipItems: (List<LineBarSpot> touchedBarSpots) {
+                          return touchedBarSpots.map((barSpot) {
+                            final flSpot = barSpot;
+                            if (flSpot.x < 0 || flSpot.x >= chartData.length) {
+                              return null;
+                            }
+                            DateTime date = chartData[flSpot.x.toInt()]['date'];
+                            String unit = _getMetricUnit();
+                            return LineTooltipItem(
+                              '${DateFormat('MMM d, h:mm a').format(date)}\n',
+                              const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 10,
+                              ),
+                              children: [
+                                TextSpan(
+                                  text: '${flSpot.y} $unit',
+                                  style: TextStyle(
+                                    color: Colors.white, // primaryColor, // Tooltip background is dark usually
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ],
+                            );
+                          }).toList();
+                        },
+                        tooltipRoundedRadius: 8,
+                        tooltipPadding: const EdgeInsets.all(8),
+                        fitInsideHorizontally: true,
+                        fitInsideVertically: true,
+                      ),
+                    ),
                   ),
                 );
               },

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_map_cancellable_tile_provider/flutter_map_cancellable_tile_provider.dart';
 import 'package:latlong2/latlong.dart';
 import 'dart:math' as math;
 import 'farm_details_screen.dart';
@@ -47,6 +48,8 @@ class _GisMapViewState extends State<GisMapView> {
   
   String _currentScale = '1: 100,000';
 
+  bool _isSatellite = true; // Default to Satellite view for "professional" look
+
   @override
   void initState() {
     super.initState();
@@ -81,6 +84,7 @@ class _GisMapViewState extends State<GisMapView> {
 
   // Mock Data (Synchronized with Farm Registry) - [Keep existing _defaultFarms list]
   final List<Map<String, dynamic>> _defaultFarms = [
+    // ... [Keep existing farms data as is] ...
     {
       "id": "FRM-2024-001",
       "name": "Goa Smart Prawn Farm",
@@ -96,8 +100,6 @@ class _GisMapViewState extends State<GisMapView> {
       "regDate": "2023-01-15",
       "license": "LIC-2023-001",
       "status": "Active",
-      
-      // GIS & Location
       "lat": 15.5406,
       "lng": 73.7562,
       "geofenceRadius": "500m",
@@ -106,8 +108,6 @@ class _GisMapViewState extends State<GisMapView> {
       "floodZone": "Moderate Risk",
       "waterSource": "Estuary & Borewell",
       "elevation": "4m",
-      
-      // Water Quality (IoT)
       "ph": 7.8,
       "temp": 28.5,
       "turbidity": "12 NTU",
@@ -116,9 +116,7 @@ class _GisMapViewState extends State<GisMapView> {
       "lastUpdate": "10 mins ago",
       "riskStatus": "Normal",
       "alarmCount": 0,
-      
-      // Fish Stock
-      "species": "Vannamei Shrimp",
+       "species": "Vannamei Shrimp",
       "quantity": "50,000",
       "stockDate": "2023-11-01",
       "harvestDate": "2024-03-15",
@@ -126,21 +124,15 @@ class _GisMapViewState extends State<GisMapView> {
       "feedSupplier": "Goa Feeds Ltd",
       "growthStage": "Growth Phase",
       "diseaseHistory": "None",
-      
-      // Risk & Alerts
       "diseaseAlerts": "None",
       "floodAlertHistory": "Oct 2023 - Minor",
       "pollutionScore": "Low (12/100)",
       "insuranceClaims": "None",
-      
-      // Financials
       "scheme": "PMMSY - Biofloc Support",
       "subsidyStatus": "Approved - 40%",
       "insuranceDetails": "Oriental Insurance - Valid till Dec 2024",
       "revenueEst": "₹ 12,00,000",
       "lossHistory": "Nil",
-      
-      // Documents
       "docs": {
         "License": "Verified",
         "Land Ownership": "Verified",
@@ -148,13 +140,9 @@ class _GisMapViewState extends State<GisMapView> {
         "Bank Details": "Verified",
         "ID Proof": "Verified"
       },
-      
-      // Analytics
       "productivity": "4.2 tons/ha",
       "mortalityRate": "5%",
       "sustainabilityScore": "85/100",
-      
-      // Workflow
       "inspector": "Dr. V. Naik",
       "inspectionDate": "2023-12-10",
       "remarks": "Excellent adherence to biosecurity protocols.",
@@ -175,8 +163,6 @@ class _GisMapViewState extends State<GisMapView> {
       "regDate": "2024-02-01",
       "license": "Pending",
       "status": "Pending Approval",
-      
-      // GIS & Location
       "lat": 15.51,
       "lng": 73.91,
       "geofenceRadius": "1000m",
@@ -185,8 +171,6 @@ class _GisMapViewState extends State<GisMapView> {
       "floodZone": "High Risk",
       "waterSource": "River Mandovi",
       "elevation": "1m",
-      
-      // Water Quality (IoT)
       "ph": 7.2,
       "temp": 29.1,
       "turbidity": "45 NTU (High)",
@@ -195,8 +179,6 @@ class _GisMapViewState extends State<GisMapView> {
       "lastUpdate": "1 hour ago",
       "riskStatus": "Warning",
       "alarmCount": 2,
-      
-       // Fish Stock
       "species": "Local Mullet & Pearl Spot",
       "quantity": "Natural Stocking",
       "stockDate": "N/A",
@@ -205,21 +187,15 @@ class _GisMapViewState extends State<GisMapView> {
       "feedSupplier": "N/A",
       "growthStage": "Maturation",
       "diseaseHistory": "Minor Gill Rot in 2022",
-      
-      // Risk & Alerts
       "diseaseAlerts": "Watch for fungal infection",
       "floodAlertHistory": "High Tide Breach - Aug 2023",
       "pollutionScore": "Moderate (45/100)",
       "insuranceClaims": "Claim #4421 - Pending",
-      
-      // Financials
       "scheme": "State Khazan Revival",
       "subsidyStatus": "Application Submitted",
       "insuranceDetails": "Not yet insured",
       "revenueEst": "₹ 5,00,000",
       "lossHistory": "₹ 50,000 (Monsoon 2023)",
-      
-      // Documents
       "docs": {
         "License": "In Process",
         "Land Ownership": "Verified",
@@ -227,13 +203,9 @@ class _GisMapViewState extends State<GisMapView> {
         "Bank Details": "Verified",
         "ID Proof": "Verified"
       },
-      
-      // Analytics
       "productivity": "1.5 tons/ha",
       "mortalityRate": "Unknown",
       "sustainabilityScore": "92/100",
-      
-      // Workflow
       "inspector": "Pending Assignment",
       "inspectionDate": "Scheduled: 2024-02-25",
       "remarks": "Waiting for site visit.",
@@ -254,8 +226,6 @@ class _GisMapViewState extends State<GisMapView> {
       "regDate": "2023-05-10",
       "license": "LIC-CAGE-003",
       "status": "Inactive",
-      
-      // GIS & Location
       "lat": 15.5000,
       "lng": 73.8300,
       "geofenceRadius": "200m",
@@ -264,8 +234,6 @@ class _GisMapViewState extends State<GisMapView> {
       "floodZone": "Moderate",
       "waterSource": "River Mandovi",
       "elevation": "0m",
-      
-      // Water Quality
       "ph": "N/A",
       "temp": "N/A",
       "turbidity": "N/A", 
@@ -274,8 +242,6 @@ class _GisMapViewState extends State<GisMapView> {
       "lastUpdate": "Offline (30 days)",
       "riskStatus": "Critical", // Offline
       "alarmCount": 0,
-       
-      // Stock
       "species": "Asian Seabass",
       "quantity": "0",
       "stockDate": "Harvested Dec 2023",
@@ -284,30 +250,22 @@ class _GisMapViewState extends State<GisMapView> {
       "feedSupplier": "Cargill",
       "growthStage": "Fallow",
       "diseaseHistory": "None",
-      
-      // Risk
       "diseaseAlerts": "None",
       "floodAlertHistory": "None",
       "pollutionScore": "High (Traffic)",
       "insuranceClaims": "None",
-      
-      // Financials
       "scheme": "Blue Revolution",
       "subsidyStatus": "Received",
       "insuranceDetails": "Expired Jan 2024",
       "revenueEst": "₹ 0",
       "lossHistory": "Nil",
-      
-       // Docs
       "docs": {
         "License": "Expired",
         "NOC": "Valid",
       },
-      
       "productivity": "Total 5 tons (2023)",
       "mortalityRate": "2%",
       "sustainabilityScore": "70/100",
-      
       "inspector": "Dr. V. Naik",
       "inspectionDate": "2023-11-20",
       "remarks": "Operations temporarily suspended.",
@@ -328,8 +286,6 @@ class _GisMapViewState extends State<GisMapView> {
       "regDate": "2024-01-10",
       "license": "Rejected",
       "status": "Rejected",
-      
-      // GIS
       "lat": 15.4000,
       "lng": 73.9500,
       "geofenceRadius": "100m",
@@ -338,8 +294,6 @@ class _GisMapViewState extends State<GisMapView> {
       "floodZone": "Low",
       "waterSource": "Municipal Supply",
       "elevation": "15m",
-      
-      // Water
       "ph": "-",
       "temp": "-",
       "turbidity": "-",
@@ -348,8 +302,6 @@ class _GisMapViewState extends State<GisMapView> {
       "lastUpdate": "Never",
       "riskStatus": "Unknown",
       "alarmCount": 0,
-      
-      // Stock
       "species": "Tilapia",
       "quantity": "0",
       "stockDate": "N/A",
@@ -358,30 +310,22 @@ class _GisMapViewState extends State<GisMapView> {
       "feedSupplier": "N/A",
       "growthStage": "N/A",
       "diseaseHistory": "N/A",
-      
-      // Risk
       "diseaseAlerts": "N/A",
       "floodAlertHistory": "N/A",
       "pollutionScore": "High (Ind. Waste)",
       "insuranceClaims": "N/A",
-      
-      // Financials
       "scheme": "PMMSY",
       "subsidyStatus": "Rejected",
       "insuranceDetails": "N/A",
       "revenueEst": "0",
       "lossHistory": "N/A",
-      
-      // Docs
       "docs": {
         "License": "Rejected",
         "Land Doc": "Disputed",
       },
-      
       "productivity": "N/A",
       "mortalityRate": "N/A",
       "sustainabilityScore": "20/100",
-      
       "inspector": "Official #42",
       "inspectionDate": "2024-01-20",
       "remarks": "Land use mismatch. Industrial zone not improved for aquaculture.",
@@ -456,9 +400,20 @@ class _GisMapViewState extends State<GisMapView> {
               ),
               children: [
                 TileLayer(
-                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  urlTemplate: _isSatellite 
+                      ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+                      : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                   userAgentPackageName: 'com.agriconnect.app',
+                  tileProvider: CancellableNetworkTileProvider(),
                 ),
+                // Hybrid Labels Overlay (Only for Satellite)
+                if (_isSatellite)
+                  TileLayer(
+                    urlTemplate: 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+                    userAgentPackageName: 'com.agriconnect.app',
+                    backgroundColor: Colors.transparent, // Ensure transparency
+                    tileProvider: CancellableNetworkTileProvider(),
+                  ),
                 // NEW: Polygon Layer for QGIS Import
                 PolygonLayer(
                   polygons: _farmPolygons,
@@ -519,42 +474,90 @@ class _GisMapViewState extends State<GisMapView> {
                     );
                   }).toList(),
                 ),
+                 // Attribution
+                RichAttributionWidget(
+                  attributions: [
+                    TextSourceAttribution(
+                      _isSatellite ? 'Esri World Imagery' : 'OpenStreetMap contributors',
+                      onTap: () {}, // No-op
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
           
+          // Layer Switcher
+          Positioned(
+            top: 20,
+            right: 20,
+            child: Material(
+              elevation: 4,
+              borderRadius: BorderRadius.circular(8),
+              color: Colors.white,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: () {
+                  setState(() {
+                    _isSatellite = !_isSatellite;
+                  });
+                },
+                child: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _isSatellite ? Icons.map_outlined : Icons.satellite_alt,
+                        color: Colors.blue.shade900,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _isSatellite ? 'Street' : 'Satellite',
+                        style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+
           // Coordinate Overlay at Bottom
           Positioned(
             left: 0,
             right: 0,
             bottom: 0,
             child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
               color: Colors.white.withOpacity(0.9),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'Co-ordinates: ',
-                    style: TextStyle(fontWeight: FontWeight.bold),
+                  Row(
+                    children: [
+                        const Icon(Icons.my_location, size: 16, color: Colors.blueGrey),
+                        const SizedBox(width: 8),
+                         Text(
+                            _hoveredLatLng != null 
+                                ? '${_hoveredLatLng!.latitude.toStringAsFixed(5)}, ${_hoveredLatLng!.longitude.toStringAsFixed(5)}'
+                                : 'Generic Zone', // More "GIS" like
+                            style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                    ],
                   ),
-                  Text(
-                    _hoveredLatLng != null 
-                        ? '${_hoveredLatLng!.latitude.toStringAsFixed(5)}, ${_hoveredLatLng!.longitude.toStringAsFixed(5)}'
-                        : 'Hover over map',
-                    style: const TextStyle(fontFamily: 'monospace'),
-                  ),
-                  const SizedBox(width: 24),
+                 
                   // Dynamic Scale Dropdown
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text('Scale: ', style: TextStyle(color: Colors.black)),
+                      const Text('Scale: ', style: TextStyle(color: Colors.black, fontSize: 13)),
+                      const SizedBox(width: 4),
                       DropdownButton<String>(
                         value: _currentScale,
                         isDense: true,
                         underline: Container(), // Remove default underline
-                        style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                        style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 13),
                         items: _scaleMapping.keys.map((String scale) {
                           return DropdownMenuItem<String>(
                             value: scale,
