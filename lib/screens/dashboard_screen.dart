@@ -3,6 +3,7 @@ import 'gis_map_view.dart';
 import 'farm_registry_screen.dart';
 import 'login_screen.dart';
 import 'farm_details_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../widgets/weather_widget.dart';
 import '../widgets/custom_back_button.dart';
 
@@ -140,14 +141,37 @@ class DashboardHomeView extends StatelessWidget {
             children: [
               _buildStatCard(
                 title: 'Total Registered Farms',
-                value: '4',
+                valueWidget: StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance.collection('farms').snapshots(),
+                  builder: (context, snapshot) {
+                     int mockFarmsCount = 4; // The predefined farms length
+                     int firebaseFarmsCount = 0;
+                     if (snapshot.hasData) {
+                       for (var doc in snapshot.data!.docs) {
+                         final data = doc.data() as Map<String, dynamic>;
+                         // Filter out unnamed farms just like registry
+                         if (data['name'] == null || data['name'].toString().trim().isEmpty || data['name'] == 'Unknown Farm') {
+                           continue;
+                         }
+                         firebaseFarmsCount++;
+                       }
+                     }
+                     return Text(
+                       '${mockFarmsCount + firebaseFarmsCount}',
+                       style: const TextStyle(color: Colors.blue, fontSize: 32, fontWeight: FontWeight.bold),
+                     );
+                  },
+                ),
                 color: Colors.blue,
                 onTap: () => onTabChange(2), // Index 2: Farm Registry
               ),
               const SizedBox(width: 24),
               _buildStatCard(
                 title: 'Farms in CRZ (Mock)',
-                value: '8',
+                valueWidget: const Text(
+                  '8',
+                  style: TextStyle(color: Colors.red, fontSize: 32, fontWeight: FontWeight.bold),
+                ),
                 color: Colors.red,
                 onTap: () => onTabChange(1), // Index 1: GIS Map
               ),
@@ -159,7 +183,7 @@ class DashboardHomeView extends StatelessWidget {
     );
   }
 
-  Widget _buildStatCard({required String title, required String value, required Color color, required VoidCallback onTap}) {
+  Widget _buildStatCard({required String title, required Widget valueWidget, required Color color, required VoidCallback onTap}) {
     return Expanded(
       child: InkWell(
         onTap: onTap,
@@ -189,14 +213,7 @@ class DashboardHomeView extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 12),
-              Text(
-                value,
-                style: TextStyle(
-                  color: color,
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+              valueWidget,
             ],
           ),
         ),

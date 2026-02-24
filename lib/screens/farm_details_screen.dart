@@ -227,10 +227,11 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
               context,
               MaterialPageRoute(
                     builder: (_) => GisMapView(
-                          initialLat: widget.farmData['lat'],
-                          initialLng: widget.farmData['lng'],
+                          initialLat: widget.farmData['lat'] is String ? double.tryParse(widget.farmData['lat']) : widget.farmData['lat'].toDouble(),
+                          initialLng: widget.farmData['lng'] is String ? double.tryParse(widget.farmData['lng']) : widget.farmData['lng'].toDouble(),
                           initialZoom: 16,
                           isAuthority: widget.isAuthority,
+                          farms: [widget.farmData],
                         ),
               ),
             );

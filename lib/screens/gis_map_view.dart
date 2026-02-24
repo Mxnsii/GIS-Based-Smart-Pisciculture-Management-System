@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'farm_details_screen.dart';
 import '../widgets/custom_back_button.dart';
 import '../services/gis_service.dart'; // Import the service
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class GisMapView extends StatefulWidget {
   final double? initialLat;
@@ -361,14 +362,82 @@ class _GisMapViewState extends State<GisMapView> {
     });
   }
 
+  Widget _buildMarkerLayer(List<Map<String, dynamic>> farmsToShow) {
+    return MarkerLayer(
+      markers: farmsToShow.map((farm) {
+        // Handle parsing logic defensively since Firebase might send strings
+        double lat = 15.0;
+        double lng = 73.0;
+        if (farm['lat'] != null) {
+          lat = farm['lat'] is String ? double.tryParse(farm['lat']) ?? 15.0 : farm['lat'].toDouble();
+        }
+        if (farm['lng'] != null) {
+          lng = farm['lng'] is String ? double.tryParse(farm['lng']) ?? 73.0 : farm['lng'].toDouble();
+        }
+
+        return Marker(
+          point: LatLng(lat, lng),
+          width: 80,
+          height: 80,
+          child: GestureDetector(
+            onTap: () {
+              showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: Text(farm['name'] ?? 'Unknown Farm'),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Owner: ${farm['owner'] ?? 'Unknown'}'),
+                      const SizedBox(height: 8),
+                      Text('Status: ${farm['status'] ?? 'Unknown'}'),
+                      const SizedBox(height: 8),
+                      Text('Lat: $lat, Lng: $lng', style: const TextStyle(fontWeight: FontWeight.w500)),
+                    ],
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Close'),
+                    ),
+                    if ((farm['status'] ?? '') != 'Inactive')
+                      ElevatedButton(
+                        onPressed: () {
+                          Navigator.pop(context); // Close dialog
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => FarmDetailsScreen(farmData: farm, isAuthority: widget.isAuthority),
+                            ),
+                          );
+                        },
+                        child: const Text('VIEW MORE DETAILS'),
+                      ),
+                  ],
+                ),
+              );
+            },
+            child: Tooltip(
+              message: '${farm['name']}\nLat: $lat, Lng: $lng',
+              child: Icon(
+                Icons.location_on,
+                color: _getStatusColor(farm['status'] ?? 'Unknown'),
+                size: 40,
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // Determine center: use passed arguments if available, otherwise default
     final LatLng center = (widget.initialLat != null && widget.initialLng != null)
         ? LatLng(widget.initialLat!, widget.initialLng!)
         : const LatLng(15.4989, 73.8278);
-        
-    final List<Map<String, dynamic>> farmsToShow = widget.farms ?? _defaultFarms;
 
     return Scaffold(
       appBar: AppBar(
@@ -416,63 +485,27 @@ class _GisMapViewState extends State<GisMapView> {
                 PolygonLayer(
                   polygons: _farmPolygons,
                 ),
-                MarkerLayer(
-                  markers: farmsToShow.map((farm) {
-                    return Marker(
-                      point: LatLng(farm['lat'] ?? 15.0, farm['lng'] ?? 73.0),
-                      width: 80,
-                      height: 80,
-                      child: GestureDetector(
-                        onTap: () {
-                          showDialog(
-                            context: context,
-                            builder: (context) => AlertDialog(
-                              title: Text(farm['name']),
-                              content: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Owner: ${farm['owner']}'),
-                                  const SizedBox(height: 8),
-                                  Text('Status: ${farm['status']}'),
-                                  const SizedBox(height: 8),
-                                  Text('Lat: ${farm['lat']}, Lng: ${farm['lng']}', style: const TextStyle(fontWeight: FontWeight.w500)),
-                                ],
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(context),
-                                  child: const Text('Close'),
-                                ),
-                                if ((farm['status'] ?? '') != 'Inactive')
-                                  ElevatedButton(
-                                    onPressed: () {
-                                      Navigator.pop(context); // Close dialog
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => FarmDetailsScreen(farmData: farm, isAuthority: widget.isAuthority),
-                                        ),
-                                      );
-                                    },
-                                    child: const Text('VIEW MORE DETAILS'),
-                                  ),
-                              ],
-                            ),
-                          );
-                        },
-                        child: Tooltip(
-                          message: '${farm['name']}\nLat: ${farm['lat'] ?? 'N/A'}, Lng: ${farm['lng'] ?? 'N/A'}',
-                          child: Icon(
-                            Icons.location_on,
-                            color: _getStatusColor(farm['status'] ?? 'Unknown'),
-                            size: 40,
-                          ),
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
+                if (widget.farms != null)
+                  _buildMarkerLayer(widget.farms!),
+                if (widget.farms == null)
+                  StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance.collection('farms').snapshots(),
+                    builder: (context, snapshot) {
+                      List<Map<String, dynamic>> combinedFarms = List.from(_defaultFarms);
+                      
+                      if (snapshot.hasData) {
+                        for (var doc in snapshot.data!.docs) {
+                          final data = doc.data() as Map<String, dynamic>;
+                          if (data['name'] == null || data['name'].toString().trim().isEmpty || data['name'] == 'Unknown Farm') {
+                            continue;
+                          }
+                          combinedFarms.add(data);
+                        }
+                      }
+                      
+                      return _buildMarkerLayer(combinedFarms);
+                    },
+                  ),
                  // Attribution
                 RichAttributionWidget(
                   attributions: [
