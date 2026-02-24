@@ -1,3 +1,5 @@
+import '../models/water_reading.dart';
+
 enum WaterStatus { safe, warning, critical }
 
 class WarningService {

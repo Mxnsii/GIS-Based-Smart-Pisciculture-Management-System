@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'farm_details_screen.dart';
 
 class FarmRegistryScreen extends StatefulWidget {
-  const FarmRegistryScreen({super.key});
+  final bool isAuthority;
+  const FarmRegistryScreen({super.key, this.isAuthority = false});
 
   @override
   State<FarmRegistryScreen> createState() => _FarmRegistryScreenState();
@@ -323,13 +326,10 @@ class _FarmRegistryScreenState extends State<FarmRegistryScreen> {
     },
   ];
 
-  List<Map<String, dynamic>> _filteredFarms = [];
-
   @override
   void initState() {
     super.initState();
-    _filteredFarms = _allFarms;
-    _searchController.addListener(_filterFarms);
+    _searchController.addListener(() => setState(() {}));
   }
 
   @override
@@ -338,31 +338,199 @@ class _FarmRegistryScreenState extends State<FarmRegistryScreen> {
     super.dispose();
   }
 
-  void _filterFarms() {
-    final query = _searchController.text.toLowerCase();
-    setState(() {
-      _filteredFarms = _allFarms.where((farm) {
-        final matchesQuery = farm['name'].toLowerCase().contains(query) ||
-            farm['owner'].toLowerCase().contains(query);
-        final matchesFilter = _selectedFilter == 'All' || farm['status'] == _selectedFilter;
-        return matchesQuery && matchesFilter;
-      }).toList();
-    });
-  }
-
   void _onFilterChanged(String filter) {
     setState(() {
       _selectedFilter = filter;
-      _filterFarms();
     });
   }
 
   void _showFarmDetails(Map<String, dynamic> farm) {
+    final String status = (farm['status'] ?? '').toString();
+    if (status == 'Inactive') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('This farm is inactive. Details are disabled.')),
+      );
+      return;
+    }
+
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => FarmDetailsScreen(farmData: farm),
+        builder: (context) => FarmDetailsScreen(farmData: farm, isAuthority: true),
       ),
+    );
+  }
+
+  void _showAddFarmDialog() {
+    final nameController = TextEditingController();
+    final ownerController = TextEditingController();
+    final locationController = TextEditingController();
+    final latController = TextEditingController();
+    final lngController = TextEditingController();
+    String status = 'Pending Approval';
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) {
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 720),
+            child: Material(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              elevation: 24,
+              child: Padding(
+                padding: EdgeInsets.only(
+                  left: 20,
+                  right: 20,
+                  top: 20,
+                  bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+                ),
+                child: StatefulBuilder(
+                  builder: (BuildContext context, StateSetter setModalState) {
+                    final _formKey = GlobalKey<FormState>();
+                    return SingleChildScrollView(
+                      child: Form(
+                        key: _formKey,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text('Add Farm', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                                IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            TextFormField(
+                              controller: nameController,
+                              decoration: const InputDecoration(labelText: 'Farm Name', border: OutlineInputBorder()),
+                              validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                            ),
+                            const SizedBox(height: 12),
+                            TextFormField(
+                              controller: ownerController,
+                              decoration: const InputDecoration(labelText: 'Owner Name', border: OutlineInputBorder()),
+                              validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                            ),
+                            const SizedBox(height: 12),
+                            TextFormField(
+                              controller: locationController,
+                              decoration: const InputDecoration(labelText: 'Location', border: OutlineInputBorder()),
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextFormField(
+                                    controller: latController,
+                                    decoration: const InputDecoration(labelText: 'Latitude', border: OutlineInputBorder()),
+                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                    validator: (v) {
+                                      if (v == null || v.trim().isEmpty) return null;
+                                      return double.tryParse(v) == null ? 'Invalid' : null;
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: TextFormField(
+                                    controller: lngController,
+                                    decoration: const InputDecoration(labelText: 'Longitude', border: OutlineInputBorder()),
+                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                    validator: (v) {
+                                      if (v == null || v.trim().isEmpty) return null;
+                                      return double.tryParse(v) == null ? 'Invalid' : null;
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            DropdownButtonFormField<String>(
+                              value: status,
+                              decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Status'),
+                              items: ['Active', 'Pending Approval', 'Inactive', 'Rejected']
+                                  .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                                  .toList(),
+                              onChanged: (v) { if (v != null) setModalState(() => status = v); },
+                            ),
+                            const SizedBox(height: 20),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: () => Navigator.pop(context),
+                                    child: const Text('Cancel'),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: ElevatedButton(
+                                onPressed: () async {
+                                      if (!_formKey.currentState!.validate()) return;
+                                      final name = nameController.text.trim();
+                                      final owner = ownerController.text.trim();
+                                      final location = locationController.text.trim();
+                                      final lat = double.tryParse(latController.text.trim()) ?? 0.0;
+                                      final lng = double.tryParse(lngController.text.trim()) ?? 0.0;
+
+                                      final newId = 'FRM-${DateTime.now().year}-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}';
+                                      final Map<String, dynamic> newFarm = {
+                                        'id': newId,
+                                        'name': name,
+                                        'owner': owner,
+                                        'contact': 'N/A',
+                                        'email': 'N/A',
+                                        'address': location,
+                                        'district': 'N/A',
+                                        'taluka': 'N/A',
+                                        'village': location,
+                                        'totalArea': 'N/A',
+                                        'pondCount': 0,
+                                        'regDate': DateTime.now().toIso8601String(),
+                                        'license': 'N/A',
+                                        'status': status,
+                                        'lat': lat,
+                                        'lng': lng,
+                                        'docs': {},
+                                        'productivity': '-',
+                                        'sustainabilityScore': '-',
+                                        'inspector': 'N/A',
+                                        'inspectionDate': 'N/A',
+                                        'remarks': '',
+                                      };
+
+                                  try {
+                                    // Save to Firebase Firestore
+                                    await FirebaseFirestore.instance.collection('farms').doc(newId).set(newFarm);
+
+                                    if (mounted) {
+                                      Navigator.pop(context);
+                                      ScaffoldMessenger.of(this.context).showSnackBar(const SnackBar(content: Text('Farm added to database')));
+                                    }
+                                  } catch (e) {
+                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error adding farm: $e')));
+                                  }
+                                    },
+                                    child: const Text('Add Farm'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -458,6 +626,18 @@ class _FarmRegistryScreenState extends State<FarmRegistryScreen> {
               const SizedBox(width: 8),
               _buildFilterChip('Pending Mirror'),
               _buildFilterChip('Inactive'),
+              const SizedBox(width: 12),
+              if (widget.isAuthority)
+                ElevatedButton.icon(
+                  onPressed: _showAddFarmDialog,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Add Farm'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  ),
+                ),
             ],
           ),
           const SizedBox(height: 24),
@@ -480,44 +660,94 @@ class _FarmRegistryScreenState extends State<FarmRegistryScreen> {
           ),
           const SizedBox(height: 8),
           Expanded(
-            child: ListView.separated(
-              itemCount: _filteredFarms.length,
-              separatorBuilder: (context, index) => const Divider(),
-              itemBuilder: (context, index) {
-                final farm = _filteredFarms[index];
-                return InkWell(
-                  onTap: () => _showFarmDetails(farm),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          flex: 3,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(farm['name'] ?? 'Unknown Farm', style: const TextStyle(fontWeight: FontWeight.bold)),
-                              Text(farm['id']?.toString() ?? 'N/A', style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
-                            ],
-                          ),
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance.collection('farms').snapshots(),
+              builder: (context, snapshot) {
+                // Combine Mock Data + Firestore Data
+                List<Map<String, dynamic>> combinedFarms = List.from(_allFarms);
+
+                if (snapshot.hasData) {
+                  for (var doc in snapshot.data!.docs) {
+                    final data = doc.data() as Map<String, dynamic>;
+                    
+                    // Filter out farms with missing or invalid names
+                    if (data['name'] == null || data['name'].toString().trim().isEmpty || data['name'] == 'Unknown Farm') {
+                      continue;
+                    }
+                    
+                    // Avoid duplicates if IDs match
+                    if (!combinedFarms.any((f) => f['id'] == data['id'])) {
+                      combinedFarms.insert(0, data);
+                    }
+                  }
+                }
+
+                // Filter
+                final query = _searchController.text.toLowerCase();
+                final filteredFarms = combinedFarms.where((farm) {
+                  final matchesQuery = (farm['name'] ?? '').toLowerCase().contains(query) ||
+                      (farm['owner'] ?? '').toLowerCase().contains(query);
+                  final matchesFilter = _selectedFilter == 'All' || farm['status'] == _selectedFilter;
+                  return matchesQuery && matchesFilter;
+                }).toList();
+
+                if (filteredFarms.isEmpty) {
+                  return const Center(child: Text('No farms found'));
+                }
+
+                return ListView.separated(
+                  itemCount: filteredFarms.length,
+                  separatorBuilder: (context, index) => const Divider(),
+                  itemBuilder: (context, index) {
+                    final farm = filteredFarms[index];
+                    return InkWell(
+                      onTap: () => _showFarmDetails(farm),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(8),
                         ),
-                        Expanded(flex: 2, child: Text(farm['owner'] ?? 'Unknown')),
-                        Expanded(flex: 2, child: Text(farm['district'] ?? 'Goa')),
-                        Expanded(
-                          flex: 1,
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: _buildStatusBadge(farm['status'] ?? 'Draft'),
-                          ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              flex: 3,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(farm['name'] ?? 'Unknown Farm', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                            ),
+                            Expanded(flex: 2, child: Text(farm['owner'] ?? 'Unknown')),
+                            // Formatting location as seen in extension details: Address/Village, Taluka, etc.
+// The Builder widget correctly extracts evaluation outside of list definition
+                            Builder(
+                              builder: (context) {
+                                String displayedLocation = 'Unknown';
+                                if (farm['village'] != null && farm['taluka'] != null) {
+                                  displayedLocation = '${farm['village']}, ${farm['taluka']}';
+                                } else if (farm['address'] != null && farm['address'].toString().trim().isNotEmpty) {
+                                  displayedLocation = farm['address'];
+                                } else if (farm['district'] != null) {
+                                  displayedLocation = farm['district'];
+                                }
+                                return Expanded(flex: 2, child: Text(displayedLocation));
+                              },
+                            ),
+                            Expanded(
+                              flex: 1,
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: _buildStatusBadge(farm['status'] ?? 'Draft'),
+                              ),
+                            ),
+                            const Icon(Icons.chevron_right, color: Colors.grey),
+                          ],
                         ),
-                        const Icon(Icons.chevron_right, color: Colors.grey),
-                      ],
-                    ),
-                  ),
+                      ),
+                    );
+                  },
                 );
               },
             ),

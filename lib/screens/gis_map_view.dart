@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:flutter_map_cancellable_tile_provider/flutter_map_cancellable_tile_provider.dart';
 import 'package:latlong2/latlong.dart';
 import 'dart:math' as math;
 import 'farm_details_screen.dart';
@@ -12,15 +11,16 @@ class GisMapView extends StatefulWidget {
   final double? initialLng;
   final double initialZoom;
   final List<Map<String, dynamic>>? farms;
+  final bool isAuthority;
 
   const GisMapView({
     super.key, 
     this.initialLat, 
     this.initialLng, 
     this.initialZoom = 12.0,
-
     this.farms,
     this.showBackButton = true,
+    this.isAuthority = false,
   });
 
   final bool showBackButton;
@@ -404,7 +404,6 @@ class _GisMapViewState extends State<GisMapView> {
                       ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
                       : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                   userAgentPackageName: 'com.agriconnect.app',
-                  tileProvider: CancellableNetworkTileProvider(),
                 ),
                 // Hybrid Labels Overlay (Only for Satellite)
                 if (_isSatellite)
@@ -412,7 +411,6 @@ class _GisMapViewState extends State<GisMapView> {
                     urlTemplate: 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
                     userAgentPackageName: 'com.agriconnect.app',
                     backgroundColor: Colors.transparent, // Ensure transparency
-                    tileProvider: CancellableNetworkTileProvider(),
                   ),
                 // NEW: Polygon Layer for QGIS Import
                 PolygonLayer(
@@ -446,18 +444,19 @@ class _GisMapViewState extends State<GisMapView> {
                                   onPressed: () => Navigator.pop(context),
                                   child: const Text('Close'),
                                 ),
-                                ElevatedButton(
-                                  onPressed: () {
-                                    Navigator.pop(context); // Close dialog
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => FarmDetailsScreen(farmData: farm),
-                                      ),
-                                    );
-                                  },
-                                  child: const Text('VIEW MORE DETAILS'),
-                                ),
+                                if ((farm['status'] ?? '') != 'Inactive')
+                                  ElevatedButton(
+                                    onPressed: () {
+                                      Navigator.pop(context); // Close dialog
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => FarmDetailsScreen(farmData: farm, isAuthority: widget.isAuthority),
+                                        ),
+                                      );
+                                    },
+                                    child: const Text('VIEW MORE DETAILS'),
+                                  ),
                               ],
                             ),
                           );

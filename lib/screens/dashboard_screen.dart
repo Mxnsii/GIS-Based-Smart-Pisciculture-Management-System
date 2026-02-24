@@ -31,8 +31,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     _pages = [
       DashboardHomeView(onTabChange: _onItemTapped),
-      GisMapView(showBackButton: false),
-      const FarmRegistryScreen(),
+      GisMapView(showBackButton: false, isAuthority: true),
+      FarmRegistryScreen(isAuthority: true),
     ];
   }
 
@@ -231,10 +231,16 @@ class DashboardHomeView extends StatelessWidget {
           ),
           ElevatedButton(
             onPressed: () {
+               final String status = (farm['status'] ?? '').toString();
+               if (status == 'Inactive') {
+                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('This farm is inactive. Details are disabled.')));
+                 return;
+               }
+
                Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => FarmDetailsScreen(farmData: farm),
+                  builder: (context) => FarmDetailsScreen(farmData: farm, isAuthority: true),
                 ),
               );
             },

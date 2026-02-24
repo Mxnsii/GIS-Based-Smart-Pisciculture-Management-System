@@ -7,8 +7,9 @@ import '../widgets/custom_back_button.dart';
 
 class FarmDetailsScreen extends StatefulWidget {
   final Map<String, dynamic> farmData;
+  final bool isAuthority;
 
-  const FarmDetailsScreen({super.key, required this.farmData});
+  const FarmDetailsScreen({super.key, required this.farmData, this.isAuthority = false});
 
   @override
   State<FarmDetailsScreen> createState() => _FarmDetailsScreenState();
@@ -19,6 +20,43 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
   final List<String> _metrics = ['Temperature', 'pH', 'Turbidity'];
   @override
   Widget build(BuildContext context) {
+    final String status = (widget.farmData['status'] ?? '').toString();
+    final bool hideSections = status == 'Active' || status == 'Pending Approval' || status == 'Rejected';
+    final bool isInactive = status == 'Inactive';
+
+    // If the current viewer is NOT an authority and the farm is marked Inactive,
+    // show a restricted screen (users should not see the farm details).
+    if (!widget.isAuthority && isInactive) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Farm Details'),
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black,
+          elevation: 0,
+          automaticallyImplyLeading: false,
+          leading: CustomBackButton(
+            onPressed: () => Navigator.pop(context),
+          ),
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: const [
+                Icon(Icons.block, size: 72, color: Colors.grey),
+                SizedBox(height: 16),
+                Text(
+                  'This farm is currently inactive. Details are restricted.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 16, color: Colors.black54),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     return Scaffold(
       backgroundColor: const Color(0xFFF1F5F9), // Slate 100
       appBar: AppBar(
@@ -47,23 +85,34 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
             _buildSectionTitle('📈 Insights'),
             _buildInsightsSection(), // Replaces _buildWaterQualitySection
             const SizedBox(height: 16),
-            _buildSectionTitle('🐠 Fish Stock'),
-            _buildStockSection(),
-            const SizedBox(height: 16),
-            _buildSectionTitle('⚠️ Risk & Alerts'),
-            _buildRiskSection(),
-            const SizedBox(height: 16),
-            _buildSectionTitle('💰 Financials & Operations'),
-            _buildFinancialSection(),
-            const SizedBox(height: 16),
+
+            // Conditionally show extended sections. The product requested
+            // removal of several sections for Active, Pending Approval, and Rejected.
+            if (!hideSections) ...[
+              _buildSectionTitle('🐠 Fish Stock'),
+              _buildStockSection(),
+              const SizedBox(height: 16),
+              _buildSectionTitle('⚠️ Risk & Alerts'),
+              _buildRiskSection(),
+              const SizedBox(height: 16),
+              _buildSectionTitle('💰 Financials & Operations'),
+              _buildFinancialSection(),
+              const SizedBox(height: 16),
+            ],
+
+            // Documents should be shown in all cases but with certain sensitive
+            // entries removed for Active/Pending/Rejected as requested.
             _buildSectionTitle('📑 Documents'),
-            _buildDocumentsSection(),
+            _buildDocumentsSection(excludeSensitive: hideSections),
             const SizedBox(height: 16),
-            _buildSectionTitle('📊 Performance Analytics'),
-            _buildAnalyticsSection(),
-            const SizedBox(height: 16),
-            _buildSectionTitle('🔐 Approval Workflow'),
-            _buildWorkflowSection(),
+
+            if (!hideSections) ...[
+              _buildSectionTitle('📊 Performance Analytics'),
+              _buildAnalyticsSection(),
+              const SizedBox(height: 16),
+              _buildSectionTitle('🔐 Approval Workflow'),
+              _buildWorkflowSection(),
+            ],
             const SizedBox(height: 32),
           ],
         ),
@@ -133,8 +182,6 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
           _buildInfoRow(Icons.phone, widget.farmData['contact'] ?? 'N/A'),
           _buildInfoRow(Icons.email, widget.farmData['email'] ?? 'N/A'),
           _buildInfoRow(Icons.location_on, '${widget.farmData['village']}, ${widget.farmData['taluka']}'),
-          _buildInfoRow(Icons.landscape, 'Area: ${widget.farmData['totalArea']} • Ponds: ${widget.farmData['pondCount']}'),
-          _buildInfoRow(Icons.calendar_today, 'Reg: ${widget.farmData['regDate']} • Lic: ${widget.farmData['license']}'),
         ],
       ),
     );
@@ -151,49 +198,51 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
                   children: [
                     _buildDetailItem('Latitude', '${widget.farmData['lat'] ?? 0.0}'),
                     _buildDetailItem('Longitude', '${widget.farmData['lng'] ?? 0.0}'),
-                    _buildDetailItem('Elevation', widget.farmData['elevation'] ?? 'N/A'),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: Column(
-                  children: [
-                    _buildDetailItem('Soil Type', widget.farmData['soilType'] ?? 'N/A'),
-                    _buildDetailItem('Zone', widget.farmData['landCategory'] ?? 'N/A'),
-                    _buildDetailItem('Water Src', widget.farmData['waterSource'] ?? 'N/A'),
                   ],
                 ),
               ),
             ],
           ),
           const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: () {
-                 if (widget.farmData['lat'] != null && widget.farmData['lng'] != null) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => GisMapView(
+          // If farm is inactive we do not show extension navigation (e.g. map)
+          finalStatusMapButton(context),
+        ],
+      ),
+    );
+  }
+
+  Widget finalStatusMapButton(BuildContext context) {
+    final String status = (widget.farmData['status'] ?? '').toString();
+    final bool isInactive = status == 'Inactive';
+    if (isInactive) {
+      return const SizedBox.shrink();
+    }
+
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: () {
+          if (widget.farmData['lat'] != null && widget.farmData['lng'] != null) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                    builder: (_) => GisMapView(
                           initialLat: widget.farmData['lat'],
                           initialLng: widget.farmData['lng'],
                           initialZoom: 16,
+                          isAuthority: widget.isAuthority,
                         ),
-                      ),
-                    );
-                 }
-              },
-              icon: const Icon(Icons.map),
-              label: const Text('View on GIS Map'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue.shade700,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 12),
               ),
-            ),
-          ),
-        ],
+            );
+          }
+        },
+        icon: const Icon(Icons.map),
+        label: const Text('View on GIS Map'),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.blue.shade700,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 12),
+        ),
       ),
     );
   }
@@ -561,13 +610,22 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
     );
   }
 
-  Widget _buildDocumentsSection() {
+  Widget _buildDocumentsSection({bool excludeSensitive = false}) {
     final docs = widget.farmData['docs'] as Map<String, dynamic>? ?? {};
-    if (docs.isEmpty) return const Text('No documents found.');
-    
+    final filtered = Map<String, dynamic>.from(docs);
+
+    if (excludeSensitive) {
+      filtered.remove('Land Ownership');
+      filtered.remove('Bank Details');
+      filtered.remove('ID Proof');
+      filtered.remove('Land Doc');
+    }
+
+    if (filtered.isEmpty) return const Text('No documents found.');
+
     return _buildCard(
       child: Column(
-        children: docs.entries.map((e) => 
+        children: filtered.entries.map((e) => 
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: Row(
@@ -630,6 +688,8 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
     return _buildCard(
       child: Column(
         children: [
+          if (widget.isAuthority) _buildStatusEditor(),
+          if (widget.isAuthority) const SizedBox(height: 8),
           _buildDetailRow('Last Inspector', widget.farmData['inspector'] ?? 'N/A'),
           _buildDetailRow('Inspection Date', widget.farmData['inspectionDate'] ?? 'N/A'),
           const SizedBox(height: 8),
@@ -641,6 +701,62 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
           ),
         ],
       ),
+    );
+
+  }
+
+  Widget _buildStatusEditor() {
+    final List<String> statuses = ['Active', 'Pending Approval', 'Inactive', 'Rejected'];
+    final String current = (widget.farmData['status'] ?? 'Pending Approval').toString();
+
+    return Row(
+      children: [
+        const Text('Status:', style: TextStyle(fontWeight: FontWeight.w600)),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: current,
+                isExpanded: true,
+                items: statuses.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                onChanged: (String? newValue) async {
+                  if (newValue == null) return;
+
+                  // If switching to Inactive, confirm the action
+                  if (newValue == 'Inactive') {
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Confirm Inactivate'),
+                        content: const Text('Marking this farm Inactive will restrict access to its details for non-authority users. Continue?'),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Confirm')),
+                        ],
+                      ),
+                    );
+
+                    if (confirmed != true) return;
+                  }
+
+                  setState(() {
+                    widget.farmData['status'] = newValue;
+                  });
+
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Status updated to $newValue')));
+                },
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
