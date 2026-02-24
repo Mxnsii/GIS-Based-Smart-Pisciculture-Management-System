@@ -311,7 +311,10 @@ class _FarmRegistryScreenState extends State<FarmRegistryScreen> {
       // Docs
       "docs": {
         "License": "Rejected",
-        "Land Doc": "Disputed",
+        "Land Ownership": "Disputed",
+        "Pollution Cert": "Pending",
+        "Bank Details": "Verified",
+        "ID Proof": "Verified"
       },
       
       "productivity": "N/A",

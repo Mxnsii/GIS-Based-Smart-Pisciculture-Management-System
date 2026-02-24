@@ -615,10 +615,8 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
     final filtered = Map<String, dynamic>.from(docs);
 
     if (excludeSensitive) {
-      filtered.remove('Land Ownership');
       filtered.remove('Bank Details');
       filtered.remove('ID Proof');
-      filtered.remove('Land Doc');
     }
 
     if (filtered.isEmpty) return const Text('No documents found.');
@@ -634,7 +632,7 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
                 Row(children: [
                   const Icon(Icons.description, color: Colors.blue, size: 20),
                   const SizedBox(width: 8),
-                  Text(e.key),
+                  Text(e.key == 'Pollution Cert' ? 'Pollution Certificate' : e.key),
                 ]),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
