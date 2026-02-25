@@ -123,13 +123,13 @@ class DashboardHomeView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: const Color(0xFFF8FAFC), // Light grey background
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-// ... [Inside DashboardHomeView build]
+    return SingleChildScrollView(
+      child: Container(
+        color: const Color(0xFFF8FAFC), // Light grey background
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           const Text(
             'Authority Dashboard',
             style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
@@ -179,6 +179,7 @@ class DashboardHomeView extends StatelessWidget {
           ),
 // ...
         ],
+      ),
       ),
     );
   }
@@ -232,20 +233,25 @@ class DashboardHomeView extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                farm['name'],
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Owner: ${farm['owner']}',
-                style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
-              ),
-            ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  farm['name'],
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Owner: ${farm['owner']}',
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
           ),
+          const SizedBox(width: 8),
           ElevatedButton(
             onPressed: () {
                final String status = (farm['status'] ?? '').toString();

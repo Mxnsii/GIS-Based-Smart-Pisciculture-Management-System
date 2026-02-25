@@ -181,7 +181,23 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
           const Divider(height: 24),
           _buildInfoRow(Icons.phone, widget.farmData['contact'] ?? 'N/A'),
           _buildInfoRow(Icons.email, widget.farmData['email'] ?? 'N/A'),
-          _buildInfoRow(Icons.location_on, '${widget.farmData['village']}, ${widget.farmData['taluka']}'),
+          Builder(
+            builder: (context) {
+              String displayedLocation = 'N/A';
+              final farm = widget.farmData;
+              if (farm['village'] != null && farm['taluka'] != null && farm['taluka'] != 'N/A' && farm['village'] != 'N/A') {
+                displayedLocation = '${farm['village']}, ${farm['taluka']}';
+              } else if (farm['village'] != null && farm['village'] != 'N/A') {
+                displayedLocation = farm['village'];
+              } else if (farm['address'] != null && farm['address'].toString().trim().isNotEmpty && farm['address'] != 'N/A') {
+                displayedLocation = farm['address'];
+              } else if (farm['district'] != null && farm['district'] != 'N/A') {
+                displayedLocation = farm['district'];
+              }
+              
+              return _buildInfoRow(Icons.location_on, displayedLocation);
+            }
+          ),
         ],
       ),
     );

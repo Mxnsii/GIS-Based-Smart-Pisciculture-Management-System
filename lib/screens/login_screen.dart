@@ -107,22 +107,28 @@ if (_isAuthority) {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 400),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const AquacultureLogo(
-                    size: 100,
-                    color: Colors.blue,
-                  ),
-                  const SizedBox(height: 24),
+      body: Container(
+        decoration: BoxDecoration(
+          image: DecorationImage(
+            image: const AssetImage('assets/images/bg.png'),
+            fit: BoxFit.cover,
+            colorFilter: ColorFilter.mode(
+              Colors.white.withOpacity(0.45), // Translucent white overlay
+              BlendMode.lighten,
+            ),
+          ),
+        ),
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24.0),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 400),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
                   Text(
                     _isLogin ? 'Welcome Back' : 'Create Account',
                     style: Theme.of(context).textTheme.headlineMedium?.copyWith(
@@ -238,10 +244,17 @@ if (_isAuthority) {
 
                   TextButton(
                     onPressed: () {
-                       Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => DashboardScreen(userName: 'User')),
-                      );
+                      if (_isAuthority) {
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(builder: (context) => const DashboardScreen(userName: 'Guest Authority')),
+                        );
+                      } else {
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(builder: (context) => const FarmerScreen(farmerName: 'Guest Farmer')),
+                        );
+                      }
                     },
                     child: const Text(
                       'Continue as Guest',
@@ -265,6 +278,7 @@ if (_isAuthority) {
               ),
             ),
           ),
+        ),
         ),
       ),
     );

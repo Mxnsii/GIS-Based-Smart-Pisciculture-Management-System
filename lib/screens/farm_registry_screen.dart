@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'farm_details_screen.dart';
 
@@ -368,8 +370,7 @@ class _FarmRegistryScreenState extends State<FarmRegistryScreen> {
     final nameController = TextEditingController();
     final ownerController = TextEditingController();
     final locationController = TextEditingController();
-    final latController = TextEditingController();
-    final lngController = TextEditingController();
+    final _formKey = GlobalKey<FormState>();
     String status = 'Pending Approval';
 
     showDialog<void>(
@@ -391,7 +392,6 @@ class _FarmRegistryScreenState extends State<FarmRegistryScreen> {
                 ),
                 child: StatefulBuilder(
                   builder: (BuildContext context, StateSetter setModalState) {
-                    final _formKey = GlobalKey<FormState>();
                     return SingleChildScrollView(
                       child: Form(
                         key: _formKey,
@@ -421,35 +421,8 @@ class _FarmRegistryScreenState extends State<FarmRegistryScreen> {
                             const SizedBox(height: 12),
                             TextFormField(
                               controller: locationController,
-                              decoration: const InputDecoration(labelText: 'Location', border: OutlineInputBorder()),
-                            ),
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: TextFormField(
-                                    controller: latController,
-                                    decoration: const InputDecoration(labelText: 'Latitude', border: OutlineInputBorder()),
-                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                    validator: (v) {
-                                      if (v == null || v.trim().isEmpty) return null;
-                                      return double.tryParse(v) == null ? 'Invalid' : null;
-                                    },
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: TextFormField(
-                                    controller: lngController,
-                                    decoration: const InputDecoration(labelText: 'Longitude', border: OutlineInputBorder()),
-                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                    validator: (v) {
-                                      if (v == null || v.trim().isEmpty) return null;
-                                      return double.tryParse(v) == null ? 'Invalid' : null;
-                                    },
-                                  ),
-                                ),
-                              ],
+                              decoration: const InputDecoration(labelText: 'Location/Address (e.g. Verna, Goa)', border: OutlineInputBorder()),
+                              validator: (v) => (v == null || v.trim().isEmpty) ? 'Required for Geocoding' : null,
                             ),
                             const SizedBox(height: 12),
                             DropdownButtonFormField<String>(
@@ -477,33 +450,50 @@ class _FarmRegistryScreenState extends State<FarmRegistryScreen> {
                                       final name = nameController.text.trim();
                                       final owner = ownerController.text.trim();
                                       final location = locationController.text.trim();
-                                      final lat = double.tryParse(latController.text.trim()) ?? 0.0;
-                                      final lng = double.tryParse(lngController.text.trim()) ?? 0.0;
+
+                                      // Show loading indicator
+                                      showDialog(
+                                        context: context,
+                                        barrierDismissible: false,
+                                        builder: (context) => const Center(child: CircularProgressIndicator()),
+                                      );
+
+                                      double lat = 0.0;
+                                      double lng = 0.0;
+
+                                      try {
+                                        final url = Uri.parse('https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(location)}&format=json&limit=1');
+                                        final response = await http.get(url, headers: {'User-Agent': 'com.agriconnect.app'});
+                                        if (response.statusCode == 200) {
+                                          final data = json.decode(response.body);
+                                          if (data is List && data.isNotEmpty) {
+                                            lat = double.tryParse(data[0]['lat'].toString()) ?? 0.0;
+                                            lng = double.tryParse(data[0]['lon'].toString()) ?? 0.0;
+                                          } else {
+                                            if (mounted) {
+                                              Navigator.pop(context); // close loader
+                                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not find geographic coordinates for this location.')));
+                                            }
+                                            return;
+                                          }
+                                        }
+                                      } catch (e) {
+                                         if (mounted) {
+                                              Navigator.pop(context); // close loader
+                                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Geocoding error: $e')));
+                                         }
+                                         return;
+                                      }
 
                                       final newId = 'FRM-${DateTime.now().year}-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}';
                                       final Map<String, dynamic> newFarm = {
                                         'id': newId,
                                         'name': name,
                                         'owner': owner,
-                                        'contact': 'N/A',
-                                        'email': 'N/A',
                                         'address': location,
-                                        'district': 'N/A',
-                                        'taluka': 'N/A',
-                                        'village': location,
-                                        'totalArea': 'N/A',
-                                        'pondCount': 0,
-                                        'regDate': DateTime.now().toIso8601String(),
-                                        'license': 'N/A',
                                         'status': status,
                                         'lat': lat,
                                         'lng': lng,
-                                        'docs': {},
-                                        'productivity': '-',
-                                        'sustainabilityScore': '-',
-                                        'inspector': 'N/A',
-                                        'inspectionDate': 'N/A',
-                                        'remarks': '',
                                       };
 
                                   try {
@@ -511,11 +501,15 @@ class _FarmRegistryScreenState extends State<FarmRegistryScreen> {
                                     await FirebaseFirestore.instance.collection('farms').doc(newId).set(newFarm);
 
                                     if (mounted) {
-                                      Navigator.pop(context);
+                                      Navigator.pop(context); // Pop loading
+                                      Navigator.pop(context); // Pop form
                                       ScaffoldMessenger.of(this.context).showSnackBar(const SnackBar(content: Text('Farm added to database')));
                                     }
                                   } catch (e) {
-                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error adding farm: $e')));
+                                    if (mounted) {
+                                        Navigator.pop(context); // Pop loading
+                                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error adding farm: $e')));
+                                    }
                                   }
                                     },
                                     child: const Text('Add Farm'),
@@ -604,64 +598,61 @@ class _FarmRegistryScreenState extends State<FarmRegistryScreen> {
             style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 24),
-          // Search and Filter Bar
-          Row(
+          // Search and Filter Options
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: TextField(
-                  controller: _searchController,
-                  decoration: const InputDecoration(
-                    hintText: 'Search by Name or Owner...',
-                    prefixIcon: Icon(Icons.search),
-                    filled: true,
-                    fillColor: Colors.white,
-                    border: OutlineInputBorder(
-                      borderSide: BorderSide.none,
-                      borderRadius: BorderRadius.all(Radius.circular(12)),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _searchController,
+                      decoration: const InputDecoration(
+                        hintText: 'Search by Name or Owner...',
+                        prefixIcon: Icon(Icons.search),
+                        filled: true,
+                        fillColor: Colors.white,
+                        border: OutlineInputBorder(
+                          borderSide: BorderSide.none,
+                          borderRadius: BorderRadius.all(Radius.circular(12)),
+                        ),
+                      ),
                     ),
                   ),
+                  if (widget.isAuthority) ...[
+                    const SizedBox(width: 12),
+                    ElevatedButton.icon(
+                      onPressed: _showAddFarmDialog,
+                      icon: const Icon(Icons.add),
+                      label: const Text('Add Farm'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 16),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _buildFilterChip('All'),
+                    const SizedBox(width: 8),
+                    _buildFilterChip('Active'),
+                    const SizedBox(width: 8),
+                    _buildFilterChip('Pending Mirror'),
+                    const SizedBox(width: 8),
+                    _buildFilterChip('Inactive'),
+                  ],
                 ),
               ),
-              const SizedBox(width: 16),
-              _buildFilterChip('All'),
-              const SizedBox(width: 8),
-              _buildFilterChip('Active'),
-              const SizedBox(width: 8),
-              _buildFilterChip('Pending Mirror'),
-              _buildFilterChip('Inactive'),
-              const SizedBox(width: 12),
-              if (widget.isAuthority)
-                ElevatedButton.icon(
-                  onPressed: _showAddFarmDialog,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Add Farm'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                  ),
-                ),
             ],
           ),
-          const SizedBox(height: 24),
-          // List Header
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade200,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Row(
-              children: [
-                Expanded(flex: 3, child: Text('Farm Name', style: TextStyle(fontWeight: FontWeight.bold))),
-                Expanded(flex: 2, child: Text('Owner', style: TextStyle(fontWeight: FontWeight.bold))),
-                Expanded(flex: 2, child: Text('Location', style: TextStyle(fontWeight: FontWeight.bold))),
-                Expanded(flex: 1, child: Text('Status', style: TextStyle(fontWeight: FontWeight.bold))),
-                SizedBox(width: 40), // For Action Icon
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 16),
+          // Farm List
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance.collection('farms').snapshots(),
@@ -703,48 +694,33 @@ class _FarmRegistryScreenState extends State<FarmRegistryScreen> {
                   separatorBuilder: (context, index) => const Divider(),
                   itemBuilder: (context, index) {
                     final farm = filteredFarms[index];
-                    return InkWell(
-                      onTap: () => _showFarmDetails(farm),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(8),
+                    
+                    String displayedLocation = 'Unknown';
+                    if (farm['village'] != null && farm['taluka'] != null) {
+                      displayedLocation = '${farm['village']}, ${farm['taluka']}';
+                    } else if (farm['address'] != null && farm['address'].toString().trim().isNotEmpty) {
+                      displayedLocation = farm['address'];
+                    } else if (farm['district'] != null) {
+                      displayedLocation = farm['district'];
+                    }
+
+                    return Card(
+                      elevation: 0,
+                      margin: EdgeInsets.zero,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        onTap: () => _showFarmDetails(farm),
+                        title: Text(farm['name'] ?? 'Unknown Farm', style: const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Padding(
+                          padding: const EdgeInsets.only(top: 4.0),
+                          child: Text('${farm['owner'] ?? 'Unknown'} • $displayedLocation'),
                         ),
-                        child: Row(
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Expanded(
-                              flex: 3,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(farm['name'] ?? 'Unknown Farm', style: const TextStyle(fontWeight: FontWeight.bold)),
-                                ],
-                              ),
-                            ),
-                            Expanded(flex: 2, child: Text(farm['owner'] ?? 'Unknown')),
-                            // Formatting location as seen in extension details: Address/Village, Taluka, etc.
-// The Builder widget correctly extracts evaluation outside of list definition
-                            Builder(
-                              builder: (context) {
-                                String displayedLocation = 'Unknown';
-                                if (farm['village'] != null && farm['taluka'] != null) {
-                                  displayedLocation = '${farm['village']}, ${farm['taluka']}';
-                                } else if (farm['address'] != null && farm['address'].toString().trim().isNotEmpty) {
-                                  displayedLocation = farm['address'];
-                                } else if (farm['district'] != null) {
-                                  displayedLocation = farm['district'];
-                                }
-                                return Expanded(flex: 2, child: Text(displayedLocation));
-                              },
-                            ),
-                            Expanded(
-                              flex: 1,
-                              child: Align(
-                                alignment: Alignment.centerLeft,
-                                child: _buildStatusBadge(farm['status'] ?? 'Draft'),
-                              ),
-                            ),
+                            _buildStatusBadge(farm['status'] ?? 'Draft'),
+                            const SizedBox(width: 8),
                             const Icon(Icons.chevron_right, color: Colors.grey),
                           ],
                         ),
