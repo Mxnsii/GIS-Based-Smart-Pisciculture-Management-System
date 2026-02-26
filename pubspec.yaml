@@ -24,6 +24,7 @@ dependencies:
   #Firestore (for water parameters)
   cloud_firestore: ^5.4.0
   url_launcher: ^6.2.5
+  firebase_database: ^11.3.10
 
   fl_chart: ^0.68.0
   google_fonts: ^8.0.1

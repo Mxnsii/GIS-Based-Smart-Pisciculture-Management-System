@@ -1,23 +1,24 @@
 import 'package:flutter/material.dart';
 import 'screens/login_screen.dart';
-import 'screens/landing_page.dart'; // Step 1: Add this import
+import 'screens/landing_page.dart'; // Your landing page
 import 'theme/app_theme.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
-
 import 'package:google_fonts/google_fonts.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Firebase
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
   runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
-  
 
   @override
   Widget build(BuildContext context) {
@@ -28,8 +29,7 @@ class MyApp extends StatelessWidget {
           Theme.of(context).textTheme,
         ),
       ),
-      // Step 2: Change LoginScreen() to LandingPage()
-      home: const LandingPage(), 
+      home: const LandingPage(), // Show Landing Page as home
       debugShowCheckedModeBanner: false,
     );
   }
