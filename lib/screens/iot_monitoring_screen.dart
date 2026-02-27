@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+<<<<<<< HEAD
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/notification_service.dart';
+=======
+import 'package:firebase_database/firebase_database.dart';
+>>>>>>> 6953cb7816db008886f160e5a599e6a43f00caf6
 
 class IotMonitoringScreen extends StatefulWidget {
   const IotMonitoringScreen({super.key});
@@ -10,8 +14,8 @@ class IotMonitoringScreen extends StatefulWidget {
 }
 
 class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
-  Map<String, bool> _hasAlerted = {"Tilapia": false, "Asian Seabass": false};
 
+<<<<<<< HEAD
   void _checkAndAlert(double currentRisk, BuildContext context, String species) {
     if (currentRisk >= 66.0 && !(_hasAlerted[species] ?? false)) {
       _hasAlerted[species] = true;
@@ -56,37 +60,16 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
     } else if (currentRisk < 66.0) {
       _hasAlerted[species] = false;
     }
+=======
+  final DatabaseReference _dbRef =
+      FirebaseDatabase.instance.ref("sensors");
+
+  DatabaseReference _getDbRef() {
+    return _dbRef;
+>>>>>>> 6953cb7816db008886f160e5a599e6a43f00caf6
   }
 
-  // Calculate Risk
-  Map<String, dynamic> calculateRisk(String species, double temp, double pH, double turbidity) {
-    int riskScore = 0;
-    int maxScore = 3;
-
-    if (species == "Tilapia" || species == "Both") {
-      if (temp > 30) riskScore += 1;
-      if (pH < 6.5 || pH > 9.0) riskScore += 1;
-      if (turbidity > 25) riskScore += 1;
-    } else if (species == "Asian Seabass" || species == "Seabass") {
-      if (temp > 32) riskScore += 1;
-      if (pH < 7.0 || pH > 8.5) riskScore += 1;
-      if (turbidity > 20) riskScore += 1;
-    }
-
-    double riskPercentage = (riskScore / maxScore) * 100;
-    String category = "";
-    if (riskPercentage == 0) {
-      category = "Healthy";
-    } else if (riskPercentage <= 33.34) {
-      category = "Mild Risk";
-    } else if (riskPercentage <= 66.67) {
-      category = "Moderate Risk";
-    } else {
-      category = "Severe Risk";
-    }
-
-    return {"percentage": riskPercentage, "category": category};
-  }
+  bool _alertShown = false;
 
   @override
   Widget build(BuildContext context) {
@@ -96,55 +79,41 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
-              Text(
-                'IoT Real-time Monitoring',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-              ),
-            ],
+          const Text(
+            'IoT Real-time Monitoring',
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 24),
-
           Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('water_parameters')
-                  .snapshots(),
+            child: StreamBuilder<DatabaseEvent>(
+              stream: _getDbRef().onValue,
               builder: (context, snapshot) {
-
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
 
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                if (snapshot.hasError) {
+                  return Center(child: Text("Error: ${snapshot.error}"));
+                }
+
+                if (!snapshot.hasData ||
+                    snapshot.data!.snapshot.value == null) {
                   return const Center(child: Text("No sensor data found"));
                 }
 
-                var doc = snapshot.data!.docs.first;
+                final Map<dynamic, dynamic> values =
+                    snapshot.data!.snapshot.value as Map<dynamic, dynamic>;
 
                 final sensorData = {
                   "farm": "Farm 1",
                   "sector": "Sector A - Pond 1",
-                  "turbidity": doc['turbidity'],
-                  "temp": doc['temperature'],
-                  "ph": doc['pH'],
+                  "turbidity": (values['turbidity'] ?? 0.0) as num,
+                  "temperature": (values['temperature'] ?? 0.0) as num,
+                  "ph": (values['ph'] ?? 0.0) as num,
                   "status": "Online"
                 };
 
-                return SingleChildScrollView(
-                  child: Wrap(
-                    spacing: 20,
-                    runSpacing: 20,
-                    children: [
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 400),
-                        child: _buildSensorCard(sensorData, context),
-                      )
-                    ],
-                  ),
-                );
+                return _buildSensorCard(sensorData);
               },
             ),
           ),
@@ -153,101 +122,71 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
     );
   }
 
-  Widget _buildSensorCard(Map<String, dynamic> data, BuildContext context) {
+  Widget _buildSensorCard(Map<String, dynamic> data) {
     final bool isOffline = data['status'] == 'Offline';
 
-    final double turbidityVal = (data['turbidity'] as num).toDouble();
-    final double tempVal = (data['temp'] as num).toDouble();
-    final double phVal = (data['ph'] as num).toDouble();
+    final double turbidityVal =
+        (data['turbidity'] as num).toDouble();
+    final double tempVal =
+        (data['temperature'] as num).toDouble();
+    final double phVal =
+        (data['ph'] as num).toDouble();
 
-    // Generic threshold warning for high levels to light up the top metrics
-    bool turbidityWarning = turbidityVal > 25.0;
-    bool tempWarning = tempVal > 30.0; 
-    bool phWarning = phVal < 6.5 || phVal > 9.0;
+    bool turbidityWarning = turbidityVal > 5.0;
+    bool tempWarning = tempVal > 30.0;
+    bool phWarning = phVal < 6.5 || phVal > 8.5;
 
     return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 3,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(20.0),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        data['farm'],
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Text(
-                        data['sector'],
-                        style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: isOffline ? Colors.red.shade50 : Colors.green.shade50,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: isOffline ? Colors.red : Colors.green),
-                  ),
-                  child: Text(
-                    data['status'],
-                    style: TextStyle(
-                      color: isOffline ? Colors.red : Colors.green,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 10,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const Divider(height: 24),
+
+            /// SENSOR METRICS ROW
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 _buildMetric(
-                  'Turbidity (NTU)',
+                  'Turbidity',
                   turbidityVal.toStringAsFixed(1),
                   Icons.blur_on,
-                  isOffline ? Colors.grey : turbidityWarning ? Colors.red : Colors.blue,
+                  turbidityWarning ? Colors.red : Colors.blue,
                 ),
                 _buildMetric(
-                  'Temp (°C)',
+                  'Temperature',
                   tempVal.toStringAsFixed(1),
                   Icons.thermostat,
-                  isOffline ? Colors.grey : tempWarning ? Colors.orange : Colors.blue,
+                  tempWarning ? Colors.orange : Colors.blue,
                 ),
                 _buildMetric(
                   'pH',
                   phVal.toStringAsFixed(1),
                   Icons.water_drop,
-                  isOffline ? Colors.grey : phWarning ? Colors.red : Colors.green,
+                  phWarning ? Colors.red : Colors.green,
                 ),
               ],
             ),
+
             const SizedBox(height: 20),
-            // RISK INJECTIONS
-            const Divider(),
+
+            /// RISK PROFILES
+            _buildRiskProfile("Tilapia", tempVal, phVal, turbidityVal),
             const SizedBox(height: 12),
-            _buildRiskProfile("Tilapia", tempVal, phVal, turbidityVal, context),
-            const SizedBox(height: 12),
-            _buildRiskProfile("Asian Seabass", tempVal, phVal, turbidityVal, context),
+            _buildRiskProfile("Asian Seabass", tempVal, phVal, turbidityVal),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildMetric(String label, String value, IconData icon, Color color) {
+  Widget _buildMetric(
+      String label,
+      String value,
+      IconData icon,
+      Color color) {
     return Column(
       children: [
         Icon(icon, color: color, size: 28),
@@ -255,38 +194,40 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
         Text(
           value,
           style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: color,
-          ),
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: color),
         ),
-        Text(
-          label,
-          style: TextStyle(
-              color: Colors.grey.shade600,
-              fontSize: 12),
-        ),
+        Text(label,
+            style:
+                TextStyle(color: Colors.grey.shade600)),
       ],
     );
   }
 
-  Widget _buildRiskProfile(String species, double tempVal, double phVal, double turbidityVal, BuildContext context) {
-    // Evaluate Risk using logic pattern
-    var riskData = calculateRisk(species, tempVal, phVal, turbidityVal);
-    double currentRisk = riskData["percentage"];
+  Widget _buildRiskProfile(
+      String species,
+      double tempVal,
+      double phVal,
+      double turbidityVal) {
+
+    Map<String, dynamic> riskData =
+        calculateRisk(species, tempVal, phVal, turbidityVal);
+
+    double risk = riskData["percentage"];
     String category = riskData["category"];
-    
-    // Check for alerts automatically
-    _checkAndAlert(currentRisk, context, species);
+
+    _checkAndAlert(risk);
 
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.blueGrey.shade50,
-        borderRadius: BorderRadius.circular(8)
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Stack(
         children: [
+<<<<<<< HEAD
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -322,11 +263,24 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
               child: const Icon(Icons.info_outline, size: 20, color: Colors.blueGrey),
             ),
           )
+=======
+          Text("Species: $species",
+              style:
+                  const TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 6),
+          Text("Risk Index: ${risk.toStringAsFixed(0)}%"),
+          Text("Status: $category",
+              style: TextStyle(
+                  color:
+                      risk > 33 ? Colors.red : Colors.green,
+                  fontWeight: FontWeight.bold)),
+>>>>>>> 6953cb7816db008886f160e5a599e6a43f00caf6
         ],
       ),
     );
   }
 
+<<<<<<< HEAD
   void _showSafeRangeInfo(BuildContext context, String species) {
     String title = species == "Tilapia" ? "TILAPIA" : "Asian seabass";
     String tempRange = species == "Tilapia" ? "24–30°C" : "26–32°C";
@@ -393,3 +347,50 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
     );
   }
 }
+=======
+  Map<String, dynamic> calculateRisk(
+      String species,
+      double temp,
+      double ph,
+      double turbidity) {
+
+    double score = 0;
+
+    if (temp > 30) score += 30;
+    if (ph < 6.5 || ph > 8.5) score += 40;
+    if (turbidity > 5) score += 30;
+
+    String category = score > 33 ? "High Risk" : "Safe";
+
+    return {
+      "percentage": score,
+      "category": category
+    };
+  }
+
+  void _checkAndAlert(double risk) {
+    if (risk > 50 && !_alertShown) {
+      _alertShown = true;
+      Future.delayed(Duration.zero, () {
+        showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text("⚠ High Risk Alert"),
+            content:
+                const Text("Water parameters are unsafe!"),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _alertShown = false;
+                },
+                child: const Text("OK"),
+              )
+            ],
+          ),
+        );
+      });
+    }
+  }
+}
+>>>>>>> 6953cb7816db008886f160e5a599e6a43f00caf6
