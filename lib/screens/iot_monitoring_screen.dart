@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/notification_service.dart';
 
 class IotMonitoringScreen extends StatefulWidget {
   const IotMonitoringScreen({super.key});
@@ -13,16 +14,45 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
 
   void _checkAndAlert(double currentRisk, BuildContext context, String species) {
     if (currentRisk >= 66.0 && !(_hasAlerted[species] ?? false)) {
+      _hasAlerted[species] = true;
+
+      // Trigger native physical push notification
+      NotificationService.showNotification(
+        id: species.hashCode,
+        title: '⚠️ HIGH RISK ALERT',
+        body: 'System Parameters for $species have exceeded the safety threshold!',
+      );
+
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('⚠️ HIGH RISK ALERT ($species): System Parameters have exceeded safety threshold!'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-          ),
+        showDialog(
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Row(
+                children: [
+                  const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 28),
+                  const SizedBox(width: 8),
+                  const Expanded(child: Text('HIGH RISK ALERT', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold))),
+                ],
+              ),
+              content: Text(
+                'System Parameters for $species have exceeded the safety threshold!\n\nPlease check the water conditions immediately.',
+                style: const TextStyle(fontSize: 16),
+              ),
+              actions: [
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                  child: const Text('OK'),
+                ),
+              ],
+            );
+          },
         );
       });
-      _hasAlerted[species] = true;
     } else if (currentRisk < 66.0) {
       _hasAlerted[species] = false;
     }
@@ -255,30 +285,111 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
         color: Colors.blueGrey.shade50,
         borderRadius: BorderRadius.circular(8)
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Stack(
         children: [
-          Text('Species: $species', style: const TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 12),
-          Row(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.analytics, size: 16, color: Colors.blueGrey),
-              const SizedBox(width: 8),
-              const Text('Risk Index: ', style: TextStyle(color: Colors.black87)),
-              Text('${currentRisk.toStringAsFixed(0)}%', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+              Text(
+                'Species: $species ${species == "Tilapia" ? "(Aeromoniasis Risk)" : "(Bacterial Risk (Vibrio-type))"}', 
+                style: const TextStyle(fontWeight: FontWeight.bold)
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  const Icon(Icons.analytics, size: 16, color: Colors.blueGrey),
+                  const SizedBox(width: 8),
+                  const Text('Risk Index: ', style: TextStyle(color: Colors.black87)),
+                  Text('${currentRisk.toStringAsFixed(0)}%', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                   const Icon(Icons.health_and_safety, size: 16, color: Colors.blueGrey),
+                   const SizedBox(width: 8),
+                   const Text('Status: ', style: TextStyle(color: Colors.black87)),
+                   Text(category, style: TextStyle(fontWeight: FontWeight.bold, color: currentRisk > 33.34 ? Colors.red : Colors.green)),
+                ],
+              ),
             ],
           ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-               const Icon(Icons.health_and_safety, size: 16, color: Colors.blueGrey),
-               const SizedBox(width: 8),
-               const Text('Status: ', style: TextStyle(color: Colors.black87)),
-               Text(category, style: TextStyle(fontWeight: FontWeight.bold, color: currentRisk > 33.34 ? Colors.red : Colors.green)),
-            ],
-          ),
+          Positioned(
+            bottom: 0,
+            right: 0,
+            child: InkWell(
+              onTap: () => _showSafeRangeInfo(context, species),
+              child: const Icon(Icons.info_outline, size: 20, color: Colors.blueGrey),
+            ),
+          )
         ],
       ),
+    );
+  }
+
+  void _showSafeRangeInfo(BuildContext context, String species) {
+    String title = species == "Tilapia" ? "TILAPIA" : "Asian seabass";
+    String tempRange = species == "Tilapia" ? "24–30°C" : "26–32°C";
+    String phRange = species == "Tilapia" ? "6.5 – 9" : "7 – 8.5";
+    String turbRange = species == "Tilapia" ? "< 25 NTU" : "< 20 NTU";
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              const Icon(Icons.check_circle, color: Colors.green),
+              const SizedBox(width: 8),
+              Expanded(child: Text('SAFE RANGE\n$title', style: const TextStyle(fontSize: 16))),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Table(
+                columnWidths: const {
+                  0: FlexColumnWidth(1),
+                  1: FlexColumnWidth(1),
+                },
+                children: [
+                  TableRow(
+                    children: [
+                      Padding(padding: const EdgeInsets.symmetric(vertical: 8.0), child: Text('Parameter', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey.shade700))),
+                      Padding(padding: const EdgeInsets.symmetric(vertical: 8.0), child: Text('Safe Zone', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey.shade700))),
+                    ]
+                  ),
+                  TableRow(
+                    children: [
+                      const Padding(padding: EdgeInsets.symmetric(vertical: 8.0), child: Text('Temperature')),
+                      Padding(padding: const EdgeInsets.symmetric(vertical: 8.0), child: Text(tempRange, style: const TextStyle(fontWeight: FontWeight.bold))),
+                    ]
+                  ),
+                  TableRow(
+                    children: [
+                      const Padding(padding: EdgeInsets.symmetric(vertical: 8.0), child: Text('pH')),
+                      Padding(padding: const EdgeInsets.symmetric(vertical: 8.0), child: Text(phRange, style: const TextStyle(fontWeight: FontWeight.bold))),
+                    ]
+                  ),
+                  TableRow(
+                    children: [
+                      const Padding(padding: EdgeInsets.symmetric(vertical: 8.0), child: Text('Turbidity')),
+                      Padding(padding: const EdgeInsets.symmetric(vertical: 8.0), child: Text(turbRange, style: const TextStyle(fontWeight: FontWeight.bold))),
+                    ]
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
     );
   }
 }

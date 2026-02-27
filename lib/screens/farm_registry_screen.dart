@@ -370,8 +370,12 @@ class _FarmRegistryScreenState extends State<FarmRegistryScreen> {
     final nameController = TextEditingController();
     final ownerController = TextEditingController();
     final locationController = TextEditingController();
+    final latController = TextEditingController();
+    final lngController = TextEditingController();
     final _formKey = GlobalKey<FormState>();
     String status = 'Pending Approval';
+    Timer? _debounce;
+    bool _isFetchingLocation = false;
 
     showDialog<void>(
       context: context,
@@ -419,10 +423,70 @@ class _FarmRegistryScreenState extends State<FarmRegistryScreen> {
                               validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
                             ),
                             const SizedBox(height: 12),
+                            const SizedBox(height: 12),
                             TextFormField(
                               controller: locationController,
-                              decoration: const InputDecoration(labelText: 'Location/Address (e.g. Verna, Goa)', border: OutlineInputBorder()),
-                              validator: (v) => (v == null || v.trim().isEmpty) ? 'Required for Geocoding' : null,
+                              decoration: InputDecoration(
+                                labelText: 'Location/Address (e.g. Verna, Goa)', 
+                                border: const OutlineInputBorder(),
+                                suffixIcon: _isFetchingLocation ? const Padding(
+                                  padding: EdgeInsets.all(12.0),
+                                  child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                                ) : const Icon(Icons.location_on),
+                              ),
+                              validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                              onChanged: (value) {
+                                if (_debounce?.isActive ?? false) _debounce!.cancel();
+                                if (value.trim().isEmpty) {
+                                   latController.clear();
+                                   lngController.clear();
+                                   return;
+                                }
+                                _debounce = Timer(const Duration(milliseconds: 1000), () async {
+                                  setModalState(() => _isFetchingLocation = true);
+                                  try {
+                                    final url = Uri.parse('https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(value)}&format=json&limit=1');
+                                    final response = await http.get(url, headers: {'User-Agent': 'com.agriconnect.app'});
+                                    if (response.statusCode == 200) {
+                                      final data = json.decode(response.body);
+                                      if (data is List && data.isNotEmpty) {
+                                        latController.text = data[0]['lat'].toString();
+                                        lngController.text = data[0]['lon'].toString();
+                                      } else {
+                                        latController.clear();
+                                        lngController.clear();
+                                      }
+                                    }
+                                  } catch (e) {
+                                    latController.clear();
+                                    lngController.clear();
+                                  } finally {
+                                    if (mounted) {
+                                      setModalState(() => _isFetchingLocation = false);
+                                    }
+                                  }
+                                });
+                              },
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextFormField(
+                                    controller: latController,
+                                    keyboardType: TextInputType.number,
+                                    decoration: const InputDecoration(labelText: 'Latitude', border: OutlineInputBorder()),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: TextFormField(
+                                    controller: lngController,
+                                    keyboardType: TextInputType.number,
+                                    decoration: const InputDecoration(labelText: 'Longitude', border: OutlineInputBorder()),
+                                  ),
+                                ),
+                              ],
                             ),
                             const SizedBox(height: 12),
                             DropdownButtonFormField<String>(
@@ -458,32 +522,8 @@ class _FarmRegistryScreenState extends State<FarmRegistryScreen> {
                                         builder: (context) => const Center(child: CircularProgressIndicator()),
                                       );
 
-                                      double lat = 0.0;
-                                      double lng = 0.0;
-
-                                      try {
-                                        final url = Uri.parse('https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(location)}&format=json&limit=1');
-                                        final response = await http.get(url, headers: {'User-Agent': 'com.agriconnect.app'});
-                                        if (response.statusCode == 200) {
-                                          final data = json.decode(response.body);
-                                          if (data is List && data.isNotEmpty) {
-                                            lat = double.tryParse(data[0]['lat'].toString()) ?? 0.0;
-                                            lng = double.tryParse(data[0]['lon'].toString()) ?? 0.0;
-                                          } else {
-                                            if (mounted) {
-                                              Navigator.pop(context); // close loader
-                                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not find geographic coordinates for this location.')));
-                                            }
-                                            return;
-                                          }
-                                        }
-                                      } catch (e) {
-                                         if (mounted) {
-                                              Navigator.pop(context); // close loader
-                                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Geocoding error: $e')));
-                                         }
-                                         return;
-                                      }
+                                      double lat = double.tryParse(latController.text) ?? 0.0;
+                                      double lng = double.tryParse(lngController.text) ?? 0.0;
 
                                       final newId = 'FRM-${DateTime.now().year}-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}';
                                       final Map<String, dynamic> newFarm = {
@@ -496,21 +536,21 @@ class _FarmRegistryScreenState extends State<FarmRegistryScreen> {
                                         'lng': lng,
                                       };
 
-                                  try {
-                                    // Save to Firebase Firestore
-                                    await FirebaseFirestore.instance.collection('farms').doc(newId).set(newFarm);
+                                      try {
+                                        // Save to Firebase Firestore
+                                        await FirebaseFirestore.instance.collection('farms').doc(newId).set(newFarm);
 
-                                    if (mounted) {
-                                      Navigator.pop(context); // Pop loading
-                                      Navigator.pop(context); // Pop form
-                                      ScaffoldMessenger.of(this.context).showSnackBar(const SnackBar(content: Text('Farm added to database')));
-                                    }
-                                  } catch (e) {
-                                    if (mounted) {
-                                        Navigator.pop(context); // Pop loading
-                                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error adding farm: $e')));
-                                    }
-                                  }
+                                        if (mounted) {
+                                          Navigator.pop(context); // Pop loading
+                                          Navigator.pop(context); // Pop form
+                                          ScaffoldMessenger.of(this.context).showSnackBar(const SnackBar(content: Text('Farm added to database')));
+                                        }
+                                      } catch (e) {
+                                        if (mounted) {
+                                            Navigator.pop(context); // Pop loading
+                                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error adding farm: $e')));
+                                        }
+                                      }
                                     },
                                     child: const Text('Add Farm'),
                                   ),
