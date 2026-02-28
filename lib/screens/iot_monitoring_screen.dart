@@ -1,11 +1,7 @@
 import 'package:flutter/material.dart';
-<<<<<<< HEAD
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../services/notification_service.dart';
-=======
 import 'package:firebase_database/firebase_database.dart';
->>>>>>> 6953cb7816db008886f160e5a599e6a43f00caf6
-
+import '../services/notification_service.dart';
 class IotMonitoringScreen extends StatefulWidget {
   const IotMonitoringScreen({super.key});
 
@@ -14,8 +10,8 @@ class IotMonitoringScreen extends StatefulWidget {
 }
 
 class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
+  Map<String, bool> _hasAlerted = {"Tilapia": false, "Asian Seabass": false};
 
-<<<<<<< HEAD
   void _checkAndAlert(double currentRisk, BuildContext context, String species) {
     if (currentRisk >= 66.0 && !(_hasAlerted[species] ?? false)) {
       _hasAlerted[species] = true;
@@ -60,16 +56,34 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
     } else if (currentRisk < 66.0) {
       _hasAlerted[species] = false;
     }
-=======
-  final DatabaseReference _dbRef =
-      FirebaseDatabase.instance.ref("sensors");
+  }
+
+  Map<String, dynamic> calculateRisk(String species, double temp, double ph, double turbidity) {
+    double score = 0;
+    if (species == "Tilapia" || species == "Both") {
+      if (temp > 30) score += 33.3;
+      if (ph < 6.5 || ph > 9.0) score += 33.3;
+      if (turbidity > 25) score += 33.3;
+    } else if (species == "Asian Seabass" || species == "Seabass") {
+      if (temp > 32) score += 33.3;
+      if (ph < 7.0 || ph > 8.5) score += 33.3;
+      if (turbidity > 20) score += 33.3;
+    }
+
+    String category = score > 34 ? "High Risk" : "Safe";
+
+    return {
+      "percentage": score,
+      "category": category
+    };
+  }
+
+  final DatabaseReference _dbRef = FirebaseDatabase.instance.ref("sensors");
 
   DatabaseReference _getDbRef() {
     return _dbRef;
->>>>>>> 6953cb7816db008886f160e5a599e6a43f00caf6
   }
 
-  bool _alertShown = false;
 
   @override
   Widget build(BuildContext context) {
@@ -123,7 +137,6 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
   }
 
   Widget _buildSensorCard(Map<String, dynamic> data) {
-    final bool isOffline = data['status'] == 'Offline';
 
     final double turbidityVal =
         (data['turbidity'] as num).toDouble();
@@ -217,7 +230,7 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
     double risk = riskData["percentage"];
     String category = riskData["category"];
 
-    _checkAndAlert(risk);
+    _checkAndAlert(risk, context, species);
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -227,7 +240,7 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
       ),
       child: Stack(
         children: [
-<<<<<<< HEAD
+
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -241,7 +254,7 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
                   const Icon(Icons.analytics, size: 16, color: Colors.blueGrey),
                   const SizedBox(width: 8),
                   const Text('Risk Index: ', style: TextStyle(color: Colors.black87)),
-                  Text('${currentRisk.toStringAsFixed(0)}%', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+                  Text('${risk.toStringAsFixed(0)}%', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
                 ],
               ),
               const SizedBox(height: 8),
@@ -250,7 +263,7 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
                    const Icon(Icons.health_and_safety, size: 16, color: Colors.blueGrey),
                    const SizedBox(width: 8),
                    const Text('Status: ', style: TextStyle(color: Colors.black87)),
-                   Text(category, style: TextStyle(fontWeight: FontWeight.bold, color: currentRisk > 33.34 ? Colors.red : Colors.green)),
+                   Text(category, style: TextStyle(fontWeight: FontWeight.bold, color: risk > 33.34 ? Colors.red : Colors.green)),
                 ],
               ),
             ],
@@ -263,24 +276,12 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
               child: const Icon(Icons.info_outline, size: 20, color: Colors.blueGrey),
             ),
           )
-=======
-          Text("Species: $species",
-              style:
-                  const TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 6),
-          Text("Risk Index: ${risk.toStringAsFixed(0)}%"),
-          Text("Status: $category",
-              style: TextStyle(
-                  color:
-                      risk > 33 ? Colors.red : Colors.green,
-                  fontWeight: FontWeight.bold)),
->>>>>>> 6953cb7816db008886f160e5a599e6a43f00caf6
         ],
       ),
     );
   }
 
-<<<<<<< HEAD
+
   void _showSafeRangeInfo(BuildContext context, String species) {
     String title = species == "Tilapia" ? "TILAPIA" : "Asian seabass";
     String tempRange = species == "Tilapia" ? "24–30°C" : "26–32°C";
@@ -347,50 +348,3 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
     );
   }
 }
-=======
-  Map<String, dynamic> calculateRisk(
-      String species,
-      double temp,
-      double ph,
-      double turbidity) {
-
-    double score = 0;
-
-    if (temp > 30) score += 30;
-    if (ph < 6.5 || ph > 8.5) score += 40;
-    if (turbidity > 5) score += 30;
-
-    String category = score > 33 ? "High Risk" : "Safe";
-
-    return {
-      "percentage": score,
-      "category": category
-    };
-  }
-
-  void _checkAndAlert(double risk) {
-    if (risk > 50 && !_alertShown) {
-      _alertShown = true;
-      Future.delayed(Duration.zero, () {
-        showDialog(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: const Text("⚠ High Risk Alert"),
-            content:
-                const Text("Water parameters are unsafe!"),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  _alertShown = false;
-                },
-                child: const Text("OK"),
-              )
-            ],
-          ),
-        );
-      });
-    }
-  }
-}
->>>>>>> 6953cb7816db008886f160e5a599e6a43f00caf6
