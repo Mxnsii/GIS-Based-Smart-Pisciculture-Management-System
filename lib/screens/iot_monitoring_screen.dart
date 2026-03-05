@@ -16,7 +16,6 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
     if (currentRisk >= 66.0 && !(_hasAlerted[species] ?? false)) {
       _hasAlerted[species] = true;
 
-      // Trigger native physical push notification
       NotificationService.showNotification(
         id: species.hashCode,
         title: '⚠️ HIGH RISK ALERT',
@@ -30,10 +29,15 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
             return AlertDialog(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               title: Row(
-                children: [
-                  const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 28),
-                  const SizedBox(width: 8),
-                  const Expanded(child: Text('HIGH RISK ALERT', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold))),
+                children: const [
+                  Icon(Icons.warning_amber_rounded, color: Colors.red, size: 28),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'HIGH RISK ALERT',
+                      style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                    ),
+                  ),
                 ],
               ),
               content: Text(
@@ -42,7 +46,9 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
               ),
               actions: [
                 ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white),
                   onPressed: () {
                     Navigator.of(context).pop();
                   },
@@ -102,6 +108,7 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
             child: StreamBuilder<DatabaseEvent>(
               stream: _getDbRef().onValue,
               builder: (context, snapshot) {
+
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
@@ -119,12 +126,9 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
                     snapshot.data!.snapshot.value as Map<dynamic, dynamic>;
 
                 final sensorData = {
-                  "farm": "Farm 1",
-                  "sector": "Sector A - Pond 1",
                   "turbidity": (values['turbidity'] ?? 0.0) as num,
                   "temperature": (values['temperature'] ?? 0.0) as num,
                   "ph": (values['ph'] ?? 0.0) as num,
-                  "status": "Online"
                 };
 
                 return _buildSensorCard(sensorData);
@@ -138,16 +142,9 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
 
   Widget _buildSensorCard(Map<String, dynamic> data) {
 
-    final double turbidityVal =
-        (data['turbidity'] as num).toDouble();
-    final double tempVal =
-        (data['temperature'] as num).toDouble();
-    final double phVal =
-        (data['ph'] as num).toDouble();
-
-    bool turbidityWarning = turbidityVal > 5.0;
-    bool tempWarning = tempVal > 30.0;
-    bool phWarning = phVal < 6.5 || phVal > 8.5;
+    final double turbidityVal = (data['turbidity'] as num).toDouble();
+    final double tempVal = (data['temperature'] as num).toDouble();
+    final double phVal = (data['ph'] as num).toDouble();
 
     return Card(
       elevation: 3,
@@ -158,34 +155,17 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
         child: Column(
           children: [
 
-            /// SENSOR METRICS ROW
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _buildMetric(
-                  'Turbidity',
-                  turbidityVal.toStringAsFixed(1),
-                  Icons.blur_on,
-                  turbidityWarning ? Colors.red : Colors.blue,
-                ),
-                _buildMetric(
-                  'Temperature',
-                  tempVal.toStringAsFixed(1),
-                  Icons.thermostat,
-                  tempWarning ? Colors.orange : Colors.blue,
-                ),
-                _buildMetric(
-                  'pH',
-                  phVal.toStringAsFixed(1),
-                  Icons.water_drop,
-                  phWarning ? Colors.red : Colors.green,
-                ),
+                _buildMetric('Turbidity', turbidityVal.toStringAsFixed(1), Icons.blur_on),
+                _buildMetric('Temperature', tempVal.toStringAsFixed(1), Icons.thermostat),
+                _buildMetric('pH', phVal.toStringAsFixed(1), Icons.water_drop),
               ],
             ),
 
             const SizedBox(height: 20),
 
-            /// RISK PROFILES
             _buildRiskProfile("Tilapia", tempVal, phVal, turbidityVal),
             const SizedBox(height: 12),
             _buildRiskProfile("Asian Seabass", tempVal, phVal, turbidityVal),
@@ -195,25 +175,18 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
     );
   }
 
-  Widget _buildMetric(
-      String label,
-      String value,
-      IconData icon,
-      Color color) {
+  Widget _buildMetric(String label, String value, IconData icon) {
     return Column(
       children: [
-        Icon(icon, color: color, size: 28),
+        Icon(icon, size: 28, color: Colors.blue),
         const SizedBox(height: 8),
         Text(
           value,
-          style: TextStyle(
+          style: const TextStyle(
               fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: color),
+              fontWeight: FontWeight.bold),
         ),
-        Text(label,
-            style:
-                TextStyle(color: Colors.grey.shade600)),
+        Text(label, style: TextStyle(color: Colors.grey.shade600)),
       ],
     );
   }
@@ -224,11 +197,11 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
       double phVal,
       double turbidityVal) {
 
-    Map<String, dynamic> riskData =
+    final riskData =
         calculateRisk(species, tempVal, phVal, turbidityVal);
 
-    double risk = riskData["percentage"];
-    String category = riskData["category"];
+    final double risk = riskData["percentage"];
+    final String category = riskData["category"];
 
     _checkAndAlert(risk, context, species);
 
@@ -238,7 +211,8 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
         color: Colors.blueGrey.shade50,
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Stack(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
 
           Column(
@@ -268,14 +242,6 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
               ),
             ],
           ),
-          Positioned(
-            bottom: 0,
-            right: 0,
-            child: InkWell(
-              onTap: () => _showSafeRangeInfo(context, species),
-              child: const Icon(Icons.info_outline, size: 20, color: Colors.blueGrey),
-            ),
-          )
         ],
       ),
     );
