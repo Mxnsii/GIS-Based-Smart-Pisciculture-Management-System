@@ -3,8 +3,8 @@ import 'iot_monitoring_screen.dart';
 import 'alerts_screen.dart';
 import 'hatcheries_screen.dart';
 import 'login_screen.dart';
-
 import 'govt_schemes_screen.dart';
+import 'complaint_registry_screen.dart'; // Import for illegal fishing reporting
 
 class FarmerScreen extends StatefulWidget {
   final String farmerName;
@@ -24,6 +24,14 @@ class _FarmerScreenState extends State<FarmerScreen> {
     HatcheriesScreen(),
     GovtSchemesScreen(),
   ];
+
+  late final Widget _complaintTab;
+
+  @override
+  void initState() {
+    super.initState();
+    _complaintTab = ComplaintRegistryScreen(farmerName: widget.farmerName);
+  }
 
   void _onItemTapped(int index) {
     setState(() {
@@ -68,7 +76,7 @@ class _FarmerScreenState extends State<FarmerScreen> {
               height: 1.0,
             )),
       ),
-      body: _pages[_selectedIndex],
+      body: _selectedIndex == 4 ? _complaintTab : _pages[_selectedIndex],
       bottomNavigationBar: BottomNavigationBar(
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(
@@ -86,6 +94,10 @@ class _FarmerScreenState extends State<FarmerScreen> {
           BottomNavigationBarItem(
             icon: Icon(Icons.policy),
             label: 'Govt Schemes',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.report_problem, color: Colors.redAccent),
+            label: 'Report Incident',
           ),
         ],
         currentIndex: _selectedIndex,

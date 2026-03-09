@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:math' as math;
 import 'gis_map_view.dart';
 import 'farm_registry_screen.dart';
 import 'login_screen.dart';
@@ -6,6 +7,7 @@ import 'farm_details_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../widgets/weather_widget.dart';
 import '../widgets/custom_back_button.dart';
+import 'authority_complaints_screen.dart'; // Implemented Authority Complaints Tab
 
 class DashboardScreen extends StatefulWidget {
   final String userName;
@@ -34,6 +36,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       DashboardHomeView(onTabChange: _onItemTapped),
       GisMapView(showBackButton: false, isAuthority: true),
       FarmRegistryScreen(isAuthority: true),
+      const AuthorityComplaintsScreen(),
     ];
   }
 
@@ -98,6 +101,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
             icon: Icon(Icons.list_alt),
             label: 'Farm Registry',
           ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.warning, color: Colors.orange),
+            label: 'Complaints',
+          ),
         ],
         currentIndex: _selectedIndex,
         selectedItemColor: Colors.blue,
@@ -123,15 +130,18 @@ class DashboardHomeView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      child: Container(
-        color: const Color(0xFFF8FAFC), // Light grey background
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-          const Text(
-            'Authority Dashboard',
+    return Column(
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            child: Container(
+              color: const Color(0xFFF8FAFC), // Light grey background
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Authority Dashboard',
             style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 16),
@@ -177,12 +187,49 @@ class DashboardHomeView extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              _buildStatCard(
+                title: 'Total Complaints',
+                valueWidget: StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance.collection('complaints').snapshots(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const SizedBox(
+                        height: 32,
+                        width: 32,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      );
+                    }
+                    if (snapshot.hasError) {
+                      return const Text('Error', style: TextStyle(color: Colors.red, fontSize: 16));
+                    }
+                    final count = snapshot.data?.docs.length ?? 0;
+                    return Text(
+                      '$count',
+                      style: const TextStyle(color: Colors.orange, fontSize: 32, fontWeight: FontWeight.bold),
+                    );
+                  },
+                ),
+                color: Colors.orange,
+                onTap: () => onTabChange(3), // Index 3: Authority Complaints Screen
+              ),
+              const SizedBox(width: 24),
+              Expanded(child: Container()), // Empty placeholder to keep card sizing consistent
+            ],
+          ),
 // ...
-        ],
-      ),
-      ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const _AnimatedFishFooter(),
+      ],
     );
   }
+
 
   Widget _buildStatCard({required String title, required Widget valueWidget, required Color color, required VoidCallback onTap}) {
     return Expanded(
@@ -280,4 +327,138 @@ class DashboardHomeView extends StatelessWidget {
       ),
     );
   }
+}
+
+// -----------------------------------------------------------------------------
+// NATIVE ANIMATED FISH FOOTER
+// -----------------------------------------------------------------------------
+class _AnimatedFishFooter extends StatefulWidget {
+  const _AnimatedFishFooter();
+
+  @override
+  __AnimatedFishFooterState createState() => __AnimatedFishFooterState();
+}
+
+class __AnimatedFishFooterState extends State<_AnimatedFishFooter> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: const Duration(seconds: 15))..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 100, // Fixed footer height
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF5AB9EA), Color(0xFF1E88E5)], // Nice ocean blue
+        ),
+      ),
+      child: ClipRect(
+        child: Stack(
+          children: [
+            // Background Wave 1
+            Positioned.fill(
+              child: Opacity(
+                opacity: 0.2,
+                child: CustomPaint(painter: _WavePainter(offset: 0, amp: 10, freq: 2)),
+              ),
+            ),
+            // Background Wave 2
+            Positioned.fill(
+              child: Opacity(
+                opacity: 0.4,
+                child: CustomPaint(painter: _WavePainter(offset: 3.14, amp: 15, freq: 1.5)),
+              ),
+            ),
+            // Swimming Fish Animations
+            AnimatedBuilder(
+              animation: _controller,
+              builder: (context, child) {
+                double w = MediaQuery.of(context).size.width;
+                return Stack(
+                  children: [
+                    // Little fast fish
+                    Positioned(
+                      top: 15,
+                      left: w - ((_controller.value * 1.5) % 1.0 * (w + 100)),
+                      child: const Text('🐠', style: TextStyle(fontSize: 20)),
+                    ),
+                    // Medium standard fish
+                    Positioned(
+                      top: 40,
+                      left: w - ((_controller.value) * (w + 100)),
+                      child: const Text('🐟', style: TextStyle(fontSize: 32)),
+                    ),
+                    // Big slow puffer
+                    Positioned(
+                      top: 60,
+                      left: w - ((_controller.value * 0.7) % 1.0 * (w + 100)),
+                      child: const Text('🐡', style: TextStyle(fontSize: 24)),
+                    ),
+                    // Opposite direction fast fish!
+                    Positioned(
+                      top: 75,
+                      right: w - ((_controller.value * 1.2) % 1.0 * (w + 100)),
+                      child: Transform(
+                        alignment: Alignment.center,
+                        transform: Matrix4.rotationY(3.14159), // Flip horizontally
+                        child: const Text('🐠', style: TextStyle(fontSize: 16)),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+            // Minimalist sandy bottom overlay (no text)
+            Positioned(
+              left: 0, right: 0, bottom: 0, height: 12,
+              child: Container(color: const Color(0xFF0D47A1).withOpacity(0.5)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _WavePainter extends CustomPainter {
+  final double offset;
+  final double amp;
+  final double freq;
+
+  _WavePainter({required this.offset, required this.amp, required this.freq});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
+    final path = Path();
+    path.moveTo(0, size.height * 0.4);
+    
+    for (double x = 0; x <= size.width; x++) {
+      double y = math.sin((x / size.width * math.pi * freq) + offset) * amp + (size.height * 0.4);
+      path.lineTo(x, y);
+    }
+    
+    path.lineTo(size.width, size.height);
+    path.lineTo(0, size.height);
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
