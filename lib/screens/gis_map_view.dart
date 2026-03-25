@@ -6,6 +6,7 @@ import 'farm_details_screen.dart';
 import '../widgets/custom_back_button.dart';
 import '../services/gis_service.dart'; // Import the service
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_map_marker_cluster/flutter_map_marker_cluster.dart';
 
 class GisMapView extends StatefulWidget {
   final double? initialLat;
@@ -49,7 +50,8 @@ class _GisMapViewState extends State<GisMapView> {
   
   String _currentScale = '1: 100,000';
 
-  bool _isSatellite = true; // Default to Satellite view for "professional" look
+  bool _isSatellite = false; // Default to Street view
+  bool _showHotspots = false; // Toggle to show complaint hotspots
 
   @override
   void initState() {
@@ -506,6 +508,157 @@ class _GisMapViewState extends State<GisMapView> {
                       return _buildMarkerLayer(combinedFarms);
                     },
                   ),
+                
+                // Hotspot Cluster Layer
+                if (_showHotspots)
+                  StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance.collection('complaints').snapshots(),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) return const SizedBox();
+                      
+                      // 1. Group similar suspicious activities
+                      Map<String, List<Marker>> groupedMarkers = {};
+
+                      for (var doc in snapshot.data!.docs) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        if (data['location'] != null && data['location'] is GeoPoint) {
+                          final point = data['location'] as GeoPoint;
+                          
+                          // Extract attributes
+                          String rawActivity = (data['activityType'] ?? '').toString().toLowerCase();
+                          String activity = 'Unknown';
+                          bool isAIHotspot = false; 
+                          
+                          if (data['aiAnalysis'] != null) {
+                            if (data['aiAnalysis']['category'] != null && data['aiAnalysis']['isMock'] != true) {
+                              activity = data['aiAnalysis']['category'].toString();
+                            }
+                            isAIHotspot = data['aiAnalysis']['isHotspot'] == true;
+                          }
+                          
+                          if (activity == 'Unknown') {
+                            if (rawActivity.contains('fishing') || rawActivity.contains('net') || rawActivity.contains('trawl') || rawActivity.contains('dynamite')) {
+                              activity = 'Suspicious Fishing Activity';
+                            } else if (rawActivity.contains('trash') || rawActivity.contains('oil') || rawActivity.contains('dump') || rawActivity.contains('wastewater')) {
+                              activity = 'Pollution / Environmental Hazard';
+                            } else {
+                              activity = data['activityType'] ?? 'Other Incident';
+                            }
+                          }
+                          
+                          final marker = Marker(
+                            point: LatLng(point.latitude, point.longitude),
+                            width: 50,
+                            height: 50,
+                            child: GestureDetector(
+                              onTap: () {
+                                 showDialog(
+                                   context: context,
+                                   builder: (context) => AlertDialog(
+                                      title: const Text('Incident Report', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
+                                      content: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text.rich(
+                                            TextSpan(
+                                              children: [
+                                                const TextSpan(text: 'Activity: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                                                TextSpan(text: '${data['activityType']}'),
+                                              ],
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text.rich(
+                                            TextSpan(
+                                              children: [
+                                                const TextSpan(text: 'Vessel: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                                                TextSpan(text: '${data['vesselType']}'),
+                                              ],
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          if (data['aiAnalysis'] != null)
+                                             Text('Priority: ${data['aiAnalysis']['priority']}', style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                                        ]
+                                      ),
+                                      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))]
+                                   )
+                                 );
+                              },
+                              child: Icon(Icons.warning, color: isAIHotspot ? Colors.red : Colors.orange, size: 30),
+                            )
+                          );
+                          
+                          groupedMarkers.putIfAbsent(activity, () => []).add(marker);
+                        }
+                      }
+
+                      // 2. Build clustered hotspots per Activity Group based on spatial proximity
+                      List<Widget> categoricalClusterLayers = [];
+                      
+                      List<Color> palette = [Colors.red, Colors.deepPurple, Colors.blue, Colors.orange, Colors.teal];
+                      int colorIndex = 0;
+
+                      groupedMarkers.forEach((activityName, markers) {
+                        final Color groupColor = palette[colorIndex % palette.length];
+                        colorIndex++;
+
+                        // Get first letters for the icon (e.g. 'Suspicious Fishing' -> 'SF')
+                        String labelTag = activityName.split(' ').map((e) => e.isNotEmpty ? e[0] : '').take(2).join('').toUpperCase();
+
+                        categoricalClusterLayers.add(
+                          MarkerClusterLayerWidget(
+                            options: MarkerClusterLayerOptions(
+                              maxClusterRadius: 160, // Increased radius to club more localized activities into unified hotspots
+                              size: const Size(60, 60),
+                              polygonOptions: PolygonOptions(
+                                borderColor: groupColor,
+                                color: groupColor.withOpacity(0.2),
+                                borderStrokeWidth: 2,
+                              ),
+                              markers: markers,
+                              builder: (context, clusterMarkers) {
+                                return Container(
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: groupColor.withOpacity(0.9),
+                                    border: Border.all(color: Colors.white, width: 2),
+                                    boxShadow: [
+                                      BoxShadow(color: groupColor.withOpacity(0.8), blurRadius: 15, spreadRadius: 5),
+                                      BoxShadow(color: groupColor.withOpacity(0.4), blurRadius: 30, spreadRadius: 15),
+                                      BoxShadow(color: groupColor.withOpacity(0.2), blurRadius: 45, spreadRadius: 25),
+                                    ],
+                                  ),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        clusterMarkers.length.toString(),
+                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+                                      ),
+                                      Text(
+                                        labelTag,
+                                        style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 1),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                          )
+                        );
+                      });
+
+                        // Return the UI Clusters
+                        return Stack(
+                          clipBehavior: Clip.none,
+                          fit: StackFit.loose,
+                          children: categoricalClusterLayers,
+                        );
+                      },
+                  ),
+
                  // Attribution
                 RichAttributionWidget(
                   attributions: [
@@ -534,8 +687,9 @@ class _GisMapViewState extends State<GisMapView> {
                     _isSatellite = !_isSatellite;
                   });
                 },
-                child: Padding(
-                  padding: const EdgeInsets.all(8.0),
+                child: Container(
+                  width: 65,
+                  padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -547,6 +701,43 @@ class _GisMapViewState extends State<GisMapView> {
                       Text(
                         _isSatellite ? 'Street' : 'Satellite',
                         style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // Hotspots Toggle Switcher
+          Positioned(
+            top: 90,
+            right: 20,
+            child: Material(
+              elevation: 4,
+              borderRadius: BorderRadius.circular(8),
+              color: Colors.white,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: () {
+                  setState(() {
+                    _showHotspots = !_showHotspots;
+                  });
+                },
+                child: Container(
+                  width: 65,
+                  padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.crisis_alert,
+                        color: _showHotspots ? Colors.red : Colors.grey,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Hotspots',
+                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: _showHotspots ? Colors.red : Colors.grey.shade800),
                       ),
                     ],
                   ),
