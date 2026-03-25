@@ -412,6 +412,7 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
                     const SizedBox(height: 12),
                     
                     DropdownButtonFormField<String>(
+                      isExpanded: true,
                       decoration: InputDecoration(
                          labelText: 'Vessel Type',
                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
@@ -421,7 +422,7 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
                       items: _vesselTypes.map((String value) {
                         return DropdownMenuItem<String>(
                           value: value,
-                          child: Text(value),
+                          child: Text(value, overflow: TextOverflow.ellipsis),
                         );
                       }).toList(),
                       onChanged: (newValue) => setState(() => _selectedVesselType = newValue),
@@ -431,6 +432,7 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
                     const SizedBox(height: 16),
                     
                     DropdownButtonFormField<String>(
+                      isExpanded: true,
                       decoration: InputDecoration(
                          labelText: 'Type of Suspicious Activity',
                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
@@ -440,7 +442,7 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
                       items: _activityTypes.map((String value) {
                         return DropdownMenuItem<String>(
                           value: value,
-                          child: Text(value),
+                          child: Text(value, overflow: TextOverflow.ellipsis),
                         );
                       }).toList(),
                       onChanged: (newValue) => setState(() => _selectedActivityType = newValue),

@@ -3,6 +3,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:latlong2/latlong.dart';
+import '../widgets/location_picker_dialog.dart';
 import 'farm_details_screen.dart';
 
 class FarmRegistryScreen extends StatefulWidget {
@@ -374,8 +376,9 @@ class _FarmRegistryScreenState extends State<FarmRegistryScreen> {
     final lngController = TextEditingController();
     final _formKey = GlobalKey<FormState>();
     String status = 'Pending Approval';
-    Timer? _debounce;
-    bool _isFetchingLocation = false;
+    String _lastSearchQuery = '';
+    List<Map<String, dynamic>> _searchResults = [];
+    bool _isSearching = false;
 
     showDialog<void>(
       context: context,
@@ -423,51 +426,159 @@ class _FarmRegistryScreenState extends State<FarmRegistryScreen> {
                               validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
                             ),
                             const SizedBox(height: 12),
-                            const SizedBox(height: 12),
                             TextFormField(
                               controller: locationController,
                               decoration: InputDecoration(
-                                labelText: 'Location/Address (e.g. Verna, Goa)', 
+                                labelText: 'Farm Location / Address',
                                 border: const OutlineInputBorder(),
-                                suffixIcon: _isFetchingLocation ? const Padding(
-                                  padding: EdgeInsets.all(12.0),
-                                  child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
-                                ) : const Icon(Icons.location_on),
+                                suffixIcon: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (_isSearching) 
+                                      const Padding(
+                                        padding: EdgeInsets.all(12), 
+                                        child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                                      ),
+                                    IconButton(
+                                      icon: const Icon(Icons.map, color: Colors.blue),
+                                      onPressed: () async {
+                                        final result = await showDialog<Map<String, dynamic>>(
+                                          context: context,
+                                          builder: (context) => const LocationPickerDialog(),
+                                        );
+                                        if (result != null) {
+                                          setModalState(() {
+                                            locationController.text = result['address'] ?? '';
+                                            latController.text = result['lat']?.toString() ?? '';
+                                            lngController.text = result['lng']?.toString() ?? '';
+                                          });
+                                        }
+                                      },
+                                    ),
+                                  ],
+                                ),
                               ),
                               validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
-                              onChanged: (value) {
-                                if (_debounce?.isActive ?? false) _debounce!.cancel();
-                                if (value.trim().isEmpty) {
-                                   latController.clear();
-                                   lngController.clear();
-                                   return;
+                              onChanged: (val) async {
+                                final currentText = val;
+                                _lastSearchQuery = currentText;
+                                if (currentText.length < 3) {
+                                  setModalState(() { _searchResults = []; _isSearching = false; });
+                                  return;
                                 }
-                                _debounce = Timer(const Duration(milliseconds: 1000), () async {
-                                  setModalState(() => _isFetchingLocation = true);
-                                  try {
-                                    final url = Uri.parse('https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(value)}&format=json&limit=1');
-                                    final response = await http.get(url, headers: {'User-Agent': 'com.agriconnect.app'});
-                                    if (response.statusCode == 200) {
-                                      final data = json.decode(response.body);
-                                      if (data is List && data.isNotEmpty) {
-                                        latController.text = data[0]['lat'].toString();
-                                        lngController.text = data[0]['lon'].toString();
-                                      } else {
-                                        latController.clear();
-                                        lngController.clear();
-                                      }
+                                setModalState(() { _isSearching = true; });
+                                
+                                await Future.delayed(const Duration(milliseconds: 600));
+                                if (_lastSearchQuery != currentText) return;
+                                
+                                try {
+                                  // Use Photon API which is specifically built for autocomplete/search-as-you-type
+                                  final url = Uri.parse('https://photon.komoot.io/api/?q=${Uri.encodeComponent(currentText)}&limit=5');
+                                  final response = await http.get(
+                                    url, 
+                                    headers: {'User-Agent': 'AquaApp/1.0 (farmer_contact@aquaapp.org)'}
+                                  ).timeout(const Duration(seconds: 10));
+                                  if (response.statusCode == 200) {
+                                    final Map<String, dynamic> data = json.decode(response.body);
+                                    final List features = data['features'] ?? [];
+                                    
+                                    if (_lastSearchQuery == currentText) {
+                                      setModalState(() {
+                                        if (features.isEmpty) {
+                                          _searchResults = [{'display_name': 'No results found', 'lat': '0', 'lon': '0'}];
+                                        } else {
+                                          _searchResults = features.map((f) {
+                                            final props = f['properties'] as Map<String, dynamic>;
+                                            final coords = f['geometry']['coordinates'] as List;
+                                            
+                                            final name = props['name']?.toString() ?? '';
+                                            final city = props['city']?.toString() ?? props['county']?.toString() ?? '';
+                                            final state = props['state']?.toString() ?? '';
+                                            final country = props['country']?.toString() ?? '';
+                                            
+                                            final parts = [name, city, state, country].where((s) => s.isNotEmpty).toList();
+                                            final distinctParts = <String>[];
+                                            for (var p in parts) {
+                                              if (distinctParts.isEmpty || distinctParts.last != p) distinctParts.add(p);
+                                            }
+                                            
+                                            return {
+                                              'display_name': distinctParts.join(', '),
+                                              'lat': coords[1].toString(), // GeoJSON is [lon, lat]
+                                              'lon': coords[0].toString(),
+                                            };
+                                          }).toList();
+                                        }
+                                        _isSearching = false;
+                                      });
                                     }
-                                  } catch (e) {
-                                    latController.clear();
-                                    lngController.clear();
-                                  } finally {
-                                    if (mounted) {
-                                      setModalState(() => _isFetchingLocation = false);
-                                    }
+                                  } else {
+                                     setModalState(() { 
+                                       _searchResults = [{'display_name': 'Server Error: ${response.statusCode}', 'lat': '0', 'lon': '0'}];
+                                       _isSearching = false; 
+                                     });
                                   }
-                                });
+                                } catch (e) {
+                                  if (_lastSearchQuery == currentText) {
+                                    setModalState(() { 
+                                      _searchResults = [{'display_name': 'Network Error: $e', 'lat': '0', 'lon': '0'}];
+                                      _isSearching = false; 
+                                    });
+                                  }
+                                }
                               },
                             ),
+                            if (_searchResults.isNotEmpty)
+                              Container(
+                                margin: const EdgeInsets.only(top: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.blue.shade200),
+                                  boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))],
+                                ),
+                                child: ListView.separated(
+                                  shrinkWrap: true,
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  padding: EdgeInsets.zero,
+                                  itemCount: _searchResults.length,
+                                  separatorBuilder: (c, i) => const Divider(height: 1),
+                                  itemBuilder: (context, index) {
+                                    final option = _searchResults[index];
+                                    return ListTile(
+                                      leading: const Icon(Icons.location_on, color: Colors.grey),
+                                      title: Text(option['display_name'] ?? '', style: const TextStyle(fontSize: 14)),
+                                      onTap: () async {
+                                          final double selectedLat = double.tryParse(option['lat']?.toString() ?? '') ?? 0.0;
+                                          final double selectedLng = double.tryParse(option['lon']?.toString() ?? '') ?? 0.0;
+                                          
+                                          setModalState(() {
+                                            _searchResults = [];
+                                            locationController.text = option['display_name'] ?? '';
+                                            latController.text = selectedLat.toString();
+                                            lngController.text = selectedLng.toString();
+                                          });
+
+                                          final result = await showDialog<Map<String, dynamic>>(
+                                            context: context,
+                                            builder: (context) => LocationPickerDialog(
+                                              initialPosition: (selectedLat != 0.0 && selectedLng != 0.0) 
+                                                  ? LatLng(selectedLat, selectedLng) : null,
+                                            ),
+                                          );
+
+                                          if (result != null) {
+                                            setModalState(() {
+                                              locationController.text = result['address'] ?? '';
+                                              latController.text = result['lat']?.toString() ?? '';
+                                              lngController.text = result['lng']?.toString() ?? '';
+                                            });
+                                          }
+                                      },
+                                    );
+                                  },
+                                ),
+                              ),
                             const SizedBox(height: 12),
                             Row(
                               children: [

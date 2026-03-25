@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_database/firebase_database.dart';
 import '../services/notification_service.dart';
 class IotMonitoringScreen extends StatefulWidget {
   const IotMonitoringScreen({super.key});
@@ -10,16 +9,20 @@ class IotMonitoringScreen extends StatefulWidget {
 }
 
 class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
-  Map<String, bool> _hasAlerted = {"Tilapia": false, "Asian Seabass": false};
+  Map<String, String> _lastAlertedIssues = {"Tilapia": "", "Asian Seabass": ""};
 
-  void _checkAndAlert(double currentRisk, BuildContext context, String species) {
-    if (currentRisk >= 66.0 && !(_hasAlerted[species] ?? false)) {
-      _hasAlerted[species] = true;
+  void _checkAndAlert(double currentRisk, BuildContext context, String species, List<String> issues) {
+    String currentIssuesStr = issues.join(",");
+
+    if (currentRisk >= 33.0 && _lastAlertedIssues[species] != currentIssuesStr) {
+      _lastAlertedIssues[species] = currentIssuesStr;
+
+      String issueText = issues.isNotEmpty ? issues.join(", ") : 'Parameters exceeded safety threshold';
 
       NotificationService.showNotification(
         id: species.hashCode,
-        title: '⚠️ HIGH RISK ALERT',
-        body: 'System Parameters for $species have exceeded the safety threshold!',
+        title: '⚠️ $species Alert',
+        body: 'Critical Issue: $issueText',
       );
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -41,7 +44,7 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
                 ],
               ),
               content: Text(
-                'System Parameters for $species have exceeded the safety threshold!\n\nPlease check the water conditions immediately.',
+                'Critical issues detected for $species:\n\n• ${issues.join("\n• ")}\n\nPlease check the water conditions immediately.',
                 style: const TextStyle(fontSize: 16),
               ),
               actions: [
@@ -59,36 +62,42 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
           },
         );
       });
-    } else if (currentRisk < 66.0) {
-      _hasAlerted[species] = false;
+    } else if (currentRisk < 33.0) {
+      _lastAlertedIssues[species] = "";
     }
   }
 
   Map<String, dynamic> calculateRisk(String species, double temp, double ph, double turbidity) {
     double score = 0;
+    List<String> issues = [];
+    
     if (species == "Tilapia" || species == "Both") {
-      if (temp > 30) score += 33.3;
-      if (ph < 6.5 || ph > 9.0) score += 33.3;
-      if (turbidity > 25) score += 33.3;
+      if (temp < 24) { score += 33.3; issues.add("Low Temperature"); }
+      else if (temp > 30) { score += 33.3; issues.add("High Temperature"); }
+      
+      if (ph < 6.5) { score += 33.3; issues.add("Low pH"); }
+      else if (ph > 9.0) { score += 33.3; issues.add("High pH"); }
+      
+      if (turbidity > 25) { score += 33.3; issues.add("High Turbidity"); }
     } else if (species == "Asian Seabass" || species == "Seabass") {
-      if (temp > 32) score += 33.3;
-      if (ph < 7.0 || ph > 8.5) score += 33.3;
-      if (turbidity > 20) score += 33.3;
+      if (temp < 26) { score += 33.3; issues.add("Low Temperature"); }
+      else if (temp > 32) { score += 33.3; issues.add("High Temperature"); }
+      
+      if (ph < 7.0) { score += 33.3; issues.add("Low pH"); }
+      else if (ph > 8.5) { score += 33.3; issues.add("High pH"); }
+      
+      if (turbidity > 20) { score += 33.3; issues.add("High Turbidity"); }
     }
 
-    String category = score > 34 ? "High Risk" : "Safe";
+    String category = score >= 33.0 ? "High Risk" : "Safe";
 
     return {
       "percentage": score,
-      "category": category
+      "category": category,
+      "issues": issues
     };
   }
 
-  final DatabaseReference _dbRef = FirebaseDatabase.instance.ref("sensors");
-
-  DatabaseReference _getDbRef() {
-    return _dbRef;
-  }
 
 
   @override
@@ -105,10 +114,9 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
           ),
           const SizedBox(height: 24),
           Expanded(
-            child: StreamBuilder<DatabaseEvent>(
-              stream: _getDbRef().onValue,
+            child: StreamBuilder<DocumentSnapshot>(
+              stream: FirebaseFirestore.instance.collection('water_parameters').doc('2pBQE1SbutGXrRT6NjjA').snapshots(),
               builder: (context, snapshot) {
-
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
@@ -117,18 +125,16 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
                   return Center(child: Text("Error: ${snapshot.error}"));
                 }
 
-                if (!snapshot.hasData ||
-                    snapshot.data!.snapshot.value == null) {
+                if (!snapshot.hasData || !snapshot.data!.exists) {
                   return const Center(child: Text("No sensor data found"));
                 }
 
-                final Map<dynamic, dynamic> values =
-                    snapshot.data!.snapshot.value as Map<dynamic, dynamic>;
+                final Map<String, dynamic> values = snapshot.data!.data() as Map<String, dynamic>;
 
                 final sensorData = {
-                  "turbidity": (values['turbidity'] ?? 0.0) as num,
-                  "temperature": (values['temperature'] ?? 0.0) as num,
-                  "ph": (values['ph'] ?? 0.0) as num,
+                  "turbidity": double.tryParse(values['turbidity']?.toString() ?? '0') ?? 0.0,
+                  "temperature": double.tryParse(values['temperature']?.toString() ?? '0') ?? 0.0,
+                  "ph": double.tryParse((values['pH'] ?? values['ph'])?.toString() ?? '0') ?? 0.0,
                 };
 
                 return _buildSensorCard(sensorData);
@@ -142,9 +148,9 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
 
   Widget _buildSensorCard(Map<String, dynamic> data) {
 
-    final double turbidityVal = (data['turbidity'] as num).toDouble();
-    final double tempVal = (data['temperature'] as num).toDouble();
-    final double phVal = (data['ph'] as num).toDouble();
+    final double turbidityVal = data['turbidity'];
+    final double tempVal = data['temperature'];
+    final double phVal = data['ph'];
 
     return Card(
       elevation: 3,
@@ -152,24 +158,26 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
           borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(20.0),
-        child: Column(
-          children: [
-
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildMetric('Turbidity', turbidityVal.toStringAsFixed(1), Icons.blur_on),
-                _buildMetric('Temperature', tempVal.toStringAsFixed(1), Icons.thermostat),
-                _buildMetric('pH', phVal.toStringAsFixed(1), Icons.water_drop),
-              ],
-            ),
-
-            const SizedBox(height: 20),
-
-            _buildRiskProfile("Tilapia", tempVal, phVal, turbidityVal),
-            const SizedBox(height: 12),
-            _buildRiskProfile("Asian Seabass", tempVal, phVal, turbidityVal),
-          ],
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+  
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildMetric('Turbidity', turbidityVal.toStringAsFixed(1), Icons.blur_on),
+                  _buildMetric('Temperature', tempVal.toStringAsFixed(1), Icons.thermostat),
+                  _buildMetric('pH', phVal.toStringAsFixed(1), Icons.water_drop),
+                ],
+              ),
+  
+              const SizedBox(height: 20),
+  
+              _buildRiskProfile("Tilapia", tempVal, phVal, turbidityVal),
+              const SizedBox(height: 12),
+              _buildRiskProfile("Asian Seabass", tempVal, phVal, turbidityVal),
+            ],
+          ),
         ),
       ),
     );
@@ -202,8 +210,9 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
 
     final double risk = riskData["percentage"];
     final String category = riskData["category"];
+    final List<String> issues = riskData["issues"] ?? [];
 
-    _checkAndAlert(risk, context, species);
+    _checkAndAlert(risk, context, species, issues);
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -218,9 +227,21 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Species: $species ${species == "Tilapia" ? "(Aeromoniasis Risk)" : "(Bacterial Risk (Vibrio-type))"}', 
-                style: const TextStyle(fontWeight: FontWeight.bold)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Species: $species ${species == "Tilapia" ? "(Aeromoniasis Risk)" : "(Bacterial Risk (Vibrio-type))"}', 
+                      style: const TextStyle(fontWeight: FontWeight.bold)
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.info_outline, color: Colors.blue),
+                    tooltip: 'Show Safe Ranges',
+                    onPressed: () => _showSafeRangeInfo(context, species),
+                  ),
+                ],
               ),
               const SizedBox(height: 12),
               Row(

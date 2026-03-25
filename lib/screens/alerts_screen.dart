@@ -35,12 +35,9 @@ class AlertsScreen extends StatelessWidget {
 
                 var doc = snapshot.data!.docs.first;
 
-                double temp =
-                    (doc['temperature'] as num).toDouble();
-                double ph =
-                    (doc['pH'] as num).toDouble();
-                double turbidity =
-                    (doc['turbidity'] as num).toDouble();
+                double temp = double.tryParse(doc['temperature']?.toString() ?? '0') ?? 0.0;
+                double ph = double.tryParse((doc['pH'] ?? doc['ph'])?.toString() ?? '0') ?? 0.0;
+                double turbidity = double.tryParse(doc['turbidity']?.toString() ?? '0') ?? 0.0;
 
                 List<Widget> alerts = [];
 
@@ -73,10 +70,10 @@ class AlertsScreen extends StatelessWidget {
                   ));
                 }
 
-                if (temp < 20) {
+                if (temp < 24) {
                   alerts.add(_buildAlertCard(
                     title: "Low Temperature",
-                    description: "Temperature is too low (< 20°C). Current: $temp°C",
+                    description: "Temperature is too low (< 24°C). Current: $temp°C",
                     severity: AlertSeverity.warning,
                     type: "IoT Monitor",
                     time: "Just now",
@@ -90,7 +87,7 @@ class AlertsScreen extends StatelessWidget {
                 } else if (temp > 30) {
                   alerts.add(_buildAlertCard(
                     title: "High Temperature",
-                    description: "Temperature exceeded 30°C. Current: $temp°C",
+                    description: "Temperature exceeded safe limit (> 30°C). Current: $temp°C",
                     severity: AlertSeverity.warning,
                     type: "IoT Monitor",
                     time: "Just now",
@@ -115,10 +112,10 @@ class AlertsScreen extends StatelessWidget {
                       "Promote plankton growth",
                     ],
                   ));
-                } else if (turbidity > 5) {
+                } else if (turbidity > 20) {
                   alerts.add(_buildAlertCard(
                     title: "High Turbidity",
-                    description: "Turbidity above safe limit (5 NTU). Current: $turbidity",
+                    description: "Turbidity above safe limit (> 20 NTU). Current: $turbidity",
                     severity: AlertSeverity.critical,
                     type: "IoT Monitor",
                     time: "Just now",
