@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart';
+
+import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class AuthorityComplaintsScreen extends StatefulWidget {
   const AuthorityComplaintsScreen({Key? key}) : super(key: key);
@@ -14,8 +16,17 @@ class AuthorityComplaintsScreen extends StatefulWidget {
 class _AuthorityComplaintsScreenState extends State<AuthorityComplaintsScreen> {
   String _searchQuery = '';
   String _selectedFilter = 'All';
+  String _selectedCategoryFilter = 'All Activities';
 
   final List<String> _filterOptions = ['All', 'Pending', 'Reviewed', 'Action Taken', 'Dismissed'];
+  final List<String> _categoryOptions = [
+    'All Activities',
+    'Fishing in Banned Area',
+    'Fishing During Ban Season',
+    'Using Illegal Small Nets',
+    'Suspicious Night Fishing',
+    'Dumping Trash or Oil'
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -35,7 +46,9 @@ class _AuthorityComplaintsScreenState extends State<AuthorityComplaintsScreen> {
           _buildSearchBar(),
           const SizedBox(height: 12),
           _buildFilterChips(),
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
+          _buildCategoryChips(),
+          const SizedBox(height: 12),
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
@@ -64,7 +77,13 @@ class _AuthorityComplaintsScreenState extends State<AuthorityComplaintsScreen> {
                   var data = doc.data() as Map<String, dynamic>;
                   bool matchesFilter = _selectedFilter == 'All' || (data['status'] ?? 'Pending') == _selectedFilter;
                   
-                  if (!matchesFilter) return false;
+                  bool matchesCategory = true;
+                  if (_selectedCategoryFilter != 'All Activities') {
+                    final activity = (data['activityType'] ?? '').toString();
+                    matchesCategory = activity.contains(_selectedCategoryFilter);
+                  }
+
+                  if (!matchesFilter || !matchesCategory) return false;
 
                   if (_searchQuery.isEmpty) return true;
 
@@ -235,6 +254,44 @@ class _AuthorityComplaintsScreenState extends State<AuthorityComplaintsScreen> {
     );
   }
 
+  Widget _buildCategoryChips() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: _categoryOptions.map((filter) {
+          bool isSelected = _selectedCategoryFilter == filter;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8.0),
+            child: FilterChip(
+              label: Text(
+                filter,
+                style: TextStyle(
+                  color: isSelected ? Colors.deepPurple.shade700 : Colors.grey.shade700,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                ),
+              ),
+              selected: isSelected,
+              onSelected: (bool selected) {
+                setState(() {
+                  _selectedCategoryFilter = filter;
+                });
+              },
+              backgroundColor: Colors.white,
+              selectedColor: Colors.deepPurple.shade50,
+              checkmarkColor: Colors.deepPurple.shade700,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+                side: BorderSide(
+                  color: isSelected ? Colors.deepPurple.shade300 : Colors.grey.shade300,
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
   Widget _buildComplaintCard(BuildContext context, String docId, Map<String, dynamic> data) {
     String status = data['status'] ?? 'Pending';
     Color statusColor = _getStatusColor(status);
@@ -314,6 +371,13 @@ class _AuthorityComplaintsScreenState extends State<AuthorityComplaintsScreen> {
                 'Reported by: ${data['reporterName'] ?? 'Unknown'}',
                 style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
               ),
+              if (data['reporterPhone'] != null && data['reporterPhone'].toString().isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  'Contact: ${data['reporterPhone']}',
+                  style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
+                ),
+              ],
               if (reportedDate != null) ...[
                 const SizedBox(height: 4),
                 Text(
@@ -390,7 +454,38 @@ class _AuthorityComplaintsScreenState extends State<AuthorityComplaintsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (data['imageUrl'] != null && data['imageUrl'].toString().isNotEmpty) ...[
-                      ClipRRect(
+                      GestureDetector(
+                        onTap: () {
+                          showDialog(
+                            context: context,
+                            builder: (context) => Dialog(
+                              backgroundColor: Colors.transparent,
+                              insetPadding: const EdgeInsets.all(10),
+                              child: Stack(
+                                alignment: Alignment.topRight,
+                                children: [
+                                  InteractiveViewer(
+                                    panEnabled: true,
+                                    minScale: 0.5,
+                                    maxScale: 4.0,
+                                    child: data['imageUrl'].toString().startsWith('data:image')
+                                        ? Image.memory(base64Decode(data['imageUrl'].toString().split(',').last), fit: BoxFit.contain)
+                                        : Image.network(data['imageUrl'], fit: BoxFit.contain),
+                                  ),
+                                  Container(
+                                    margin: const EdgeInsets.all(8),
+                                    decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                                    child: IconButton(
+                                      icon: const Icon(Icons.close, color: Colors.white),
+                                      onPressed: () => Navigator.pop(context),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                        child: ClipRRect(
                       borderRadius: BorderRadius.circular(12),
                       child: data['imageUrl'].toString().startsWith('data:image')
                         ? Image.memory(
@@ -416,6 +511,7 @@ class _AuthorityComplaintsScreenState extends State<AuthorityComplaintsScreen> {
                             ),
                           ),
                     ),
+                      ),
                       const SizedBox(height: 16),
                     ] else ...[
                       Container(
@@ -438,6 +534,13 @@ class _AuthorityComplaintsScreenState extends State<AuthorityComplaintsScreen> {
                       const SizedBox(height: 20),
                     ],
                     
+                    if (data['audioUrl'] != null && data['audioUrl'].toString().isNotEmpty) ...[
+                      const Text('Voice Evidence', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+                      const SizedBox(height: 6),
+                      _AudioPlayerWidget(audioData: data['audioUrl']),
+                      const SizedBox(height: 20),
+                    ],
+
                     Text('Activity Type: ${data['activityType'] ?? 'N/A'}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                     const SizedBox(height: 8),
                     Text('Vessel Type: ${data['vesselType'] ?? 'N/A'}'),
@@ -451,6 +554,10 @@ class _AuthorityComplaintsScreenState extends State<AuthorityComplaintsScreen> {
                     const Text('Location Coordinates', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
                     const SizedBox(height: 4),
                     if (data['location'] != null) ...[
+                      if (data['locationName'] != null) ...[
+                        Text('${data['locationName']}', style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.blueGrey)),
+                        const SizedBox(height: 4),
+                      ],
                       Text('Lat: ${(data['location'] as GeoPoint).latitude}'),
                       Text('Lng: ${(data['location'] as GeoPoint).longitude}'),
                     ] else ...[
@@ -589,38 +696,22 @@ class _AuthorityComplaintsScreenState extends State<AuthorityComplaintsScreen> {
                 return;
               }
               
-              // Update status and proof
+              // Build acknowledgement message
+              final reporterName = data['originalFarmerName'] ?? data['reporterName'] ?? 'Citizen';
+              final String acknowledgementMessage = "Dear $reporterName, your complaint about ${data['activityType']} has been marked as '$newStatus'. Details: ${proofController.text.trim()} - Maritime Authority";
+
+              // Update status, proof, and acknowledgement message
               await FirebaseFirestore.instance.collection('complaints').doc(docId).update({
                 'status': newStatus,
                 'proofOfAction': proofController.text.trim(),
                 'statusUpdatedAt': FieldValue.serverTimestamp(),
+                'acknowledgementMessage': acknowledgementMessage,
               });
               
               if(context.mounted) {
                 Navigator.pop(context); // Close dialog
                 Navigator.pop(context); // Close modal
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Status updated to $newStatus')));
-              }
-
-              // Send SMS Notification
-              final reporterName = data['reporterName'] ?? 'Citizen';
-              final String smsMessage = "Dear $reporterName, your complaint about ${data['activityType']} has been marked as '$newStatus'. Details: ${proofController.text.trim()} - Maritime Authority";
-              
-              final Uri smsUri = Uri(
-                scheme: 'sms',
-                queryParameters: <String, String>{
-                  'body': smsMessage,
-                },
-              );
-              
-              try {
-                if (await canLaunchUrl(smsUri)) {
-                  await launchUrl(smsUri);
-                } else {
-                  print("Could not launch SMS intent.");
-                }
-              } catch (e) {
-                print("Error launching SMS: $e");
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Status updated to $newStatus and farmer notified in-app.')));
               }
             },
             style: ElevatedButton.styleFrom(backgroundColor: _getStatusColor(newStatus), foregroundColor: Colors.white),
@@ -632,3 +723,101 @@ class _AuthorityComplaintsScreenState extends State<AuthorityComplaintsScreen> {
   }
 }
 
+class _AudioPlayerWidget extends StatefulWidget {
+  final String audioData;
+  const _AudioPlayerWidget({Key? key, required this.audioData}) : super(key: key);
+
+  @override
+  State<_AudioPlayerWidget> createState() => _AudioPlayerWidgetState();
+}
+
+class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
+  late AudioPlayer _audioPlayer;
+  bool _isPlaying = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _audioPlayer = AudioPlayer();
+    _audioPlayer.onPlayerStateChanged.listen((state) {
+      if (mounted) {
+        setState(() {
+          _isPlaying = state == PlayerState.playing;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _audioPlayer.dispose();
+    super.dispose();
+  }
+
+  void _togglePlay() async {
+    if (_isPlaying) {
+      await _audioPlayer.pause();
+    } else {
+      try {
+        if (widget.audioData.startsWith('data:audio')) {
+           final String base64Str = widget.audioData.split(',').last;
+           final bytes = base64Decode(base64Str);
+           await _audioPlayer.play(BytesSource(bytes));
+        } else {
+           await _audioPlayer.play(UrlSource(widget.audioData));
+        }
+      } catch (e) {
+        print("Error playing audio evidence: $e");
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.blue.shade200),
+      ),
+      child: Row(
+        children: [
+          Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+            ),
+            child: IconButton(
+              icon: Icon(
+                _isPlaying ? Icons.pause : Icons.play_arrow,
+                color: Colors.blue.shade700,
+              ),
+              onPressed: _togglePlay,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _isPlaying ? 'Playing Audio...' : 'Voice Evidence Attached',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blue.shade900,
+                    fontSize: 14,
+                  ),
+                ),
+                Text(
+                  'Tap to listen to the farmer\'s recording.',
+                  style: TextStyle(color: Colors.blue.shade700, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

@@ -7,11 +7,6 @@ class AIComplaintService {
   static const String _apiKey = 'AIzaSyANLBtNn6ynJCTdC6-TDkSXpS5ggpXCfxM';
   
   static Future<Map<String, dynamic>?> analyzeComplaint(Map<String, dynamic> complaintData) async {
-    if (_apiKey == 'AIzaSyANLBtNn6ynJCTdC6-TDkSXpS5ggpXCfxM') {
-      // Mock Data if API key is not provided to prevent crashes
-      return _getMockAnalysis(complaintData);
-    }
-
     try {
       final model = GenerativeModel(
         model: 'gemini-1.5-flash',
@@ -29,7 +24,7 @@ class AIComplaintService {
       
       Determine the following based on the maritime rules, illegal fishing context, and GIS context:
       1. priority: "High", "Medium", or "Low". Give High to illegal fishing in critical zones or large operations.
-      2. category: General categorization of the issue based on description (e.g., "Illegal Trawling", "Net Violations", "Unlicensed Fishing").
+      2. category: Classify the issue strictly into one of these based on the data: "Illegal Fishing", "Sand Erosion", "Industrial Wastewater", or "Other".
       3. isHotspot: true or false. Determine if this sounds like a recurring hotspot violation.
       4. pfzProximity: "Inside PFZ", "Near PFZ", or "Outside PFZ" (estimate based on context, since exact geo-analysis requires pure DB, give a realistic guess based on description).
       5. crzViolation: true or false. Coastal Regulation Zone violation? (e.g. fishing too close to shore or mangroves).
@@ -84,7 +79,7 @@ class AIComplaintService {
       "isHotspot": description.contains('again') || description.contains('always'),
       "pfzProximity": description.contains('deep') ? "Inside PFZ" : "Outside PFZ",
       "crzViolation": isCrz,
-      "summary": "Mock AI Analysis: Highlighted as \$priority priority based on reported activity characteristics.",
+      "summary": "Mock AI Analysis: Highlighted as $priority priority based on reported activity characteristics.",
       "isMock": true
     };
   }

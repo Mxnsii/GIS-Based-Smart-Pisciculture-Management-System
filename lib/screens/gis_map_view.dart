@@ -512,12 +512,25 @@ class _GisMapViewState extends State<GisMapView> {
                 // Hotspot Cluster Layer
                 if (_showHotspots)
                   StreamBuilder<QuerySnapshot>(
-                    stream: FirebaseFirestore.instance.collection('complaints').snapshots(),
+                    stream: FirebaseFirestore.instance
+                        .collection('complaints')
+                        .where('status', isEqualTo: 'Action Taken') // Filter for Action Taken
+                        .snapshots(),
                     builder: (context, snapshot) {
                       if (!snapshot.hasData) return const SizedBox();
                       
                       // 1. Group similar suspicious activities
                       Map<String, List<Marker>> groupedMarkers = {};
+
+                      // Activity Styles Mapping
+                      Map<String, Map<String, dynamic>> activityStyles = {
+                        'Fishing in Banned Area (CRZ / Protected Zone)': {'tag': 'CRZ', 'color': Colors.red},
+                        'Fishing During Ban Season': {'tag': 'BS', 'color': Colors.orange},
+                        'Using Illegal Small Nets': {'tag': 'SN', 'color': Colors.deepPurple},
+                        'Suspicious Night Fishing': {'tag': 'NF', 'color': Colors.indigo},
+                        'Dumping Trash or Oil': {'tag': 'DT/O', 'color': Colors.brown},
+                        'Other': {'tag': 'OTH', 'color': Colors.teal},
+                      };
 
                       for (var doc in snapshot.data!.docs) {
                         final data = doc.data() as Map<String, dynamic>;
@@ -525,31 +538,20 @@ class _GisMapViewState extends State<GisMapView> {
                           final point = data['location'] as GeoPoint;
                           
                           // Extract attributes
-                          String rawActivity = (data['activityType'] ?? '').toString().toLowerCase();
-                          String activity = 'Unknown';
+                          String activity = (data['activityType'] ?? 'Other').toString();
+                          final style = activityStyles[activity] ?? activityStyles['Other']!;
+                          final Color groupColor = style['color'];
+                          final String labelTag = style['tag'];
                           bool isAIHotspot = false; 
                           
                           if (data['aiAnalysis'] != null) {
-                            if (data['aiAnalysis']['category'] != null && data['aiAnalysis']['isMock'] != true) {
-                              activity = data['aiAnalysis']['category'].toString();
-                            }
                             isAIHotspot = data['aiAnalysis']['isHotspot'] == true;
-                          }
-                          
-                          if (activity == 'Unknown') {
-                            if (rawActivity.contains('fishing') || rawActivity.contains('net') || rawActivity.contains('trawl') || rawActivity.contains('dynamite')) {
-                              activity = 'Suspicious Fishing Activity';
-                            } else if (rawActivity.contains('trash') || rawActivity.contains('oil') || rawActivity.contains('dump') || rawActivity.contains('wastewater')) {
-                              activity = 'Pollution / Environmental Hazard';
-                            } else {
-                              activity = data['activityType'] ?? 'Other Incident';
-                            }
                           }
                           
                           final marker = Marker(
                             point: LatLng(point.latitude, point.longitude),
-                            width: 50,
-                            height: 50,
+                            width: 60,
+                            height: 60,
                             child: GestureDetector(
                               onTap: () {
                                  showDialog(
@@ -582,11 +584,37 @@ class _GisMapViewState extends State<GisMapView> {
                                              Text('Priority: ${data['aiAnalysis']['priority']}', style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
                                         ]
                                       ),
-                                      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))]
+                                      actions: [
+                                        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+                                        ElevatedButton(
+                                          onPressed: () {
+                                            Navigator.pop(context); // Close summary dialog
+                                            _showDetailedComplaint(context, data);
+                                          },
+                                          style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white),
+                                          child: const Text('More Details'),
+                                        ),
+                                      ]
                                    )
                                  );
                               },
-                              child: Icon(Icons.warning, color: isAIHotspot ? Colors.red : Colors.orange, size: 30),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: groupColor.withOpacity(0.9),
+                                  border: Border.all(color: Colors.white, width: 2),
+                                  boxShadow: [
+                                    BoxShadow(color: groupColor.withOpacity(0.5), blurRadius: 10, spreadRadius: 2),
+                                    if (isAIHotspot) BoxShadow(color: Colors.red.withOpacity(0.8), blurRadius: 15, spreadRadius: 4),
+                                  ],
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    labelTag,
+                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10),
+                                  ),
+                                ),
+                              ),
                             )
                           );
                           
@@ -596,21 +624,17 @@ class _GisMapViewState extends State<GisMapView> {
 
                       // 2. Build clustered hotspots per Activity Group based on spatial proximity
                       List<Widget> categoricalClusterLayers = [];
-                      
-                      List<Color> palette = [Colors.red, Colors.deepPurple, Colors.blue, Colors.orange, Colors.teal];
-                      int colorIndex = 0;
 
                       groupedMarkers.forEach((activityName, markers) {
-                        final Color groupColor = palette[colorIndex % palette.length];
-                        colorIndex++;
-
-                        // Get first letters for the icon (e.g. 'Suspicious Fishing' -> 'SF')
-                        String labelTag = activityName.split(' ').map((e) => e.isNotEmpty ? e[0] : '').take(2).join('').toUpperCase();
+                        // Get style or default to 'Other'
+                        final style = activityStyles[activityName] ?? activityStyles['Other']!;
+                        final Color groupColor = style['color'];
+                        final String labelTag = style['tag'];
 
                         categoricalClusterLayers.add(
                           MarkerClusterLayerWidget(
                             options: MarkerClusterLayerOptions(
-                              maxClusterRadius: 160, // Increased radius to club more localized activities into unified hotspots
+                              maxClusterRadius: 160,
                               size: const Size(60, 60),
                               polygonOptions: PolygonOptions(
                                 borderColor: groupColor,
@@ -807,4 +831,94 @@ class _GisMapViewState extends State<GisMapView> {
       ),
     );
   }
+
+  void _showDetailedComplaint(BuildContext context, Map<String, dynamic> data) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        DateTime? date = data['timestamp'] != null ? (data['timestamp'] as Timestamp).toDate() : null;
+        String status = data['status'] ?? 'Pending';
+        Color statusColor = status == 'Action Taken' ? Colors.green : (status == 'Dismissed' ? Colors.red : Colors.orange);
+        
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              const Icon(Icons.description, color: Colors.blue),
+              const SizedBox(width: 8),
+              const Text('Detailed Incident Report'),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildDetailRow('Activity', data['activityType']),
+                _buildDetailRow('Vessel', data['vesselType']),
+                _buildDetailRow('Description', data['description']),
+                _buildDetailRow('Date', date != null ? "${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute}" : 'Unknown'),
+                const Divider(),
+                _buildDetailRow('Reporter', data['reporterName'] ?? 'Anonymous'),
+                if (data['isAnonymous'] == true) 
+                  const Text('(Submitted Anonymously)', style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey, fontSize: 12)),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    const Text('Status: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: statusColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: statusColor),
+                      ),
+                      child: Text(status, style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 12)),
+                    ),
+                  ],
+                ),
+                if (data['proofOfAction'] != null && data['proofOfAction'].toString().isNotEmpty) ...[
+                  const Divider(height: 24),
+                  const Text('Proof of Action / Authority Remarks:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+                  const SizedBox(height: 8),
+                  Text(data['proofOfAction']),
+                ],
+                if (data['acknowledgementMessage'] != null && data['acknowledgementMessage'].toString().isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  const Text('Official Feedback:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(8)),
+                    child: Text(data['acknowledgementMessage'], style: const TextStyle(fontSize: 13)),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Back to Map'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildDetailRow(String label, dynamic value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueGrey, fontSize: 12)),
+          const SizedBox(height: 2),
+          Text(value?.toString() ?? 'N/A', style: const TextStyle(fontSize: 14)),
+        ],
+      ),
+    );
+  }
 }
+

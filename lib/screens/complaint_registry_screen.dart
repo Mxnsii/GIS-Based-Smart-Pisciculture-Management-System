@@ -9,6 +9,10 @@ import 'package:uuid/uuid.dart';
 import 'dart:convert';
 import '../widgets/custom_back_button.dart';
 import '../services/ai_complaint_service.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:record/record.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:http/http.dart' as http;
 // Note: Bypassing Firebase Storage by using Base64 encoding
 
 class ComplaintRegistryScreen extends StatefulWidget {
@@ -26,72 +30,143 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
   String? _selectedVesselType;
   String? _selectedActivityType;
   final TextEditingController _descriptionController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
   
-  Position? _currentPosition;
+  Map<String, dynamic>? _selectedLocationData;
+  bool _isSearchingLocation = false;
   File? _imageFile;
   Uint8List? _webImage;
   bool _isSubmitting = false;
   bool _isSuccess = false;
   String? _submittedComplaintId;
 
+  late stt.SpeechToText _speech;
+  bool _isListening = false;
+
+  late AudioRecorder _audioRecorder;
+  late AudioPlayer _audioPlayer;
+  bool _isRecording = false;
+  String? _audioPath;
+  bool _isPlaying = false;
+
   final List<String> _vesselTypes = [
-    'Big Net Fishing Boat (Trawler)',
-    'Boat Surrounding Fish with Net (Purse Seiner)',
-    'Boat Using Long Hooks Line (Longliner)',
-    'Small / Unknown Boat',
-    'Other Boat'
+    'Large Net Fishing Boat (Trawler)',
+    'Small Local Boat',
+    'Speedboat / Motorboat',
+    'Large Cargo / Transfer Ship',
+    'Unknown / Other Boat'
   ];
 
   final List<String> _activityTypes = [
-    'Fishing in No-Fishing Area (Restricted)',
-    'Using Illegal Fishing Nets / Gear',
-    'Boat Without Fishing License',
-    'Two Boats Exchanging Fish in Sea',
-    'Other Suspicious Activity'
+    'Fishing in Banned Area (CRZ / Protected Zone)',
+    'Fishing During Ban Season',
+    'Using Illegal Small Nets',
+    'Suspicious Night Fishing',
+    'Dumping Trash or Oil'
   ];
 
   @override
   void initState() {
     super.initState();
-    _getCurrentLocation();
+    _speech = stt.SpeechToText();
+    _audioRecorder = AudioRecorder();
+    _audioPlayer = AudioPlayer();
+    _audioPlayer.onPlayerStateChanged.listen((state) {
+      if(mounted) {
+        setState(() {
+          _isPlaying = state == PlayerState.playing;
+        });
+      }
+    });
   }
 
-  Future<void> _getCurrentLocation() async {
-    bool serviceEnabled;
-    LocationPermission permission;
+  @override
+  void dispose() {
+    _audioRecorder.dispose();
+    _audioPlayer.dispose();
+    _descriptionController.dispose();
+    _phoneController.dispose();
+    super.dispose();
+  }
 
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      if(mounted) {
-         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Location services are disabled.')));
-      }
-      return;
-    }
-
-    permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        if(mounted){
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Location permissions are denied')));
+  void _listenToSpeech() async {
+    if (!_isListening) {
+      bool available = await _speech.initialize(
+        onStatus: (val) {
+          if (val == 'done' && mounted) {
+            setState(() => _isListening = false);
+          }
+        },
+        onError: (val) => print('onError: $val'),
+      );
+      if (available) {
+        setState(() => _isListening = true);
+        _speech.listen(
+          onResult: (val) {
+            setState(() {
+              _descriptionController.text = val.recognizedWords;
+            });
+          },
+        );
+      } else {
+        setState(() => _isListening = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Speech recognition not available.'))
+          );
         }
-        return;
       }
+    } else {
+      setState(() => _isListening = false);
+      _speech.stop();
     }
-    
-    if (permission == LocationPermission.deniedForever) {
-      if(mounted){
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Location permissions are permanently denied, we cannot request permissions.')));
-      }
-      return;
-    } 
+  }
 
-    final position = await Geolocator.getCurrentPosition();
-    if(mounted){
+  Future<void> _startRecording() async {
+    try {
+      if (await _audioRecorder.hasPermission()) {
+        final String path = kIsWeb ? '' : '${Directory.systemTemp.path}/complaint_audio.m4a';
+        await _audioRecorder.start(const RecordConfig(), path: path); 
         setState(() {
-          _currentPosition = position;
+          _isRecording = true;
+          _audioPath = null;
         });
+      }
+    } catch (e) {
+      print("Error starting record: $e");
     }
+  }
+
+  Future<void> _stopRecording() async {
+    try {
+      final path = await _audioRecorder.stop();
+      setState(() {
+        _isRecording = false;
+        _audioPath = path;
+      });
+    } catch (e) {
+      print("Error stopping record: $e");
+    }
+  }
+
+  void _playAudio() async {
+    if (_audioPath != null) {
+      if (_isPlaying) {
+        await _audioPlayer.pause();
+      } else {
+        if(kIsWeb) {
+            await _audioPlayer.play(UrlSource(_audioPath!));
+        } else {
+            await _audioPlayer.play(DeviceFileSource(_audioPath!));
+        }
+      }
+    }
+  }
+
+  void _deleteAudio() {
+    setState(() {
+      _audioPath = null;
+    });
   }
 
   Future<void> _pickImage() async {
@@ -116,10 +191,40 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
     }
   }
 
+  Future<Iterable<Map<String, dynamic>>> _searchLocations(String query) async {
+    if (query.trim().length < 3) return const Iterable<Map<String, dynamic>>.empty();
+    
+    setState(() => _isSearchingLocation = true);
+
+    try {
+      // Using OpenStreetMap Nominatim API (Free, no API key required)
+      // Bounded roughly to Goa region for better relevance
+      final url = Uri.parse('https://nominatim.openstreetmap.org/search?q=$query&format=json&addressdetails=1&countrycodes=in&viewbox=73.5,15.8,74.5,14.8&bounded=1&limit=5');
+      final response = await http.get(url, headers: {'User-Agent': 'GIS_Smart_Pisciculture_App'});
+      
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body);
+        if (mounted) setState(() => _isSearchingLocation = false);
+        return data.map((item) {
+          return {
+            'name': item['display_name'],
+            'lat': double.parse(item['lat']),
+            'lng': double.parse(item['lon']),
+          };
+        }).toList();
+      }
+    } catch (e) {
+      print("Error fetching places: $e");
+    }
+    
+    if (mounted) setState(() => _isSearchingLocation = false);
+    return const Iterable<Map<String, dynamic>>.empty();
+  }
+
   Future<void> _submitComplaint() async {
-    if (!_formKey.currentState!.validate() || _currentPosition == null) {
+    if (!_formKey.currentState!.validate() || _selectedLocationData == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please complete all required fields and wait for location.')),
+        const SnackBar(content: Text('Please complete all required fields and pick a valid incident location.')),
       );
       return;
     }
@@ -149,13 +254,31 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
       }
       print("Image URL: $imageUrl");
 
+      // 1b. Convert Audio to Base64 (Bypass Storage)
+      String? audioUrl;
+      try {
+        if (_audioPath != null && _audioPath!.isNotEmpty) {
+          List<int> bytes;
+          if (kIsWeb) {
+             final response = await http.get(Uri.parse(_audioPath!));
+             bytes = response.bodyBytes;
+          } else {
+             bytes = await File(_audioPath!).readAsBytes();
+          }
+          final base64String = base64Encode(bytes);
+          audioUrl = 'data:audio/mp4;base64,$base64String';
+        }
+      } catch (e) {
+        print("Audio conversion failed: $e. Continuing without audio.");
+      }
+
       // 2. Add AI Analysis
       print("Analyzing complaint with AI...");
       final aiAnalysis = await AIComplaintService.analyzeComplaint({
         'activityType': _selectedActivityType,
         'vesselType': _selectedVesselType,
         'description': _descriptionController.text,
-        'location': _currentPosition,
+        'location': 'Lat: ${_selectedLocationData!['lat']}, Lng: ${_selectedLocationData!['lng']} (${_selectedLocationData!['name']})',
       });
 
       // 3. Save data to Firestore
@@ -163,12 +286,16 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
       await FirebaseFirestore.instance.collection('complaints').doc(complaintId).set({
         'id': complaintId,
         'reporterName': _isAnonymous ? 'Anonymous' : widget.farmerName,
+        'originalFarmerName': widget.farmerName, // Always link to original farmer id/name
         'isAnonymous': _isAnonymous,
         'vesselType': _selectedVesselType,
         'activityType': _selectedActivityType,
         'description': _descriptionController.text,
-        'location': GeoPoint(_currentPosition!.latitude, _currentPosition!.longitude),
+        'reporterPhone': _phoneController.text.trim(),
+        'location': GeoPoint(_selectedLocationData!['lat'], _selectedLocationData!['lng']),
+        'locationName': _selectedLocationData!['name'],
         'imageUrl': imageUrl,
+        'audioUrl': audioUrl,
         'status': 'Pending', // Pending, Reviewed, Action Taken
         'timestamp': FieldValue.serverTimestamp(),
         if (aiAnalysis != null) 'aiAnalysis': aiAnalysis,
@@ -199,9 +326,10 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
       appBar: AppBar(
-        // ... (appbar remains same but conditionally hiding back button on success is handled in body, lets keep back button to close)
         backgroundColor: Colors.white,
         elevation: 0,
         leading: CustomBackButton(onPressed: () {
@@ -212,6 +340,7 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
               _selectedVesselType = null;
               _selectedActivityType = null;
               _descriptionController.clear();
+              _phoneController.clear();
               _imageFile = null;
               _webImage = null;
             });
@@ -224,21 +353,33 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
           'Report Incident',
           style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
         ),
+        bottom: const TabBar(
+          labelColor: Colors.redAccent,
+          unselectedLabelColor: Colors.grey,
+          indicatorColor: Colors.redAccent,
+          tabs: [
+            Tab(icon: Icon(Icons.edit_note), text: "New Report"),
+            Tab(icon: Icon(Icons.history), text: "My Reports"),
+          ],
+        ),
       ),
-      body: _isSuccess 
-        ? _buildSuccessScreen()
-        : (_isSubmitting 
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(24.0),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  // ... forms remain same until end of Column
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildWarningBanner(),
-                    const SizedBox(height: 24),
+      body: TabBarView(
+        children: [
+          // Tab 1: New Report Form
+          _isSuccess 
+            ? _buildSuccessScreen()
+            : (_isSubmitting 
+              ? const Center(child: CircularProgressIndicator())
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildWarningBanner(),
+                        const SizedBox(height: 24),
+                        // ... (form content continues)
                     
                     // Anonymity Toggle
                     SwitchListTile(
@@ -255,6 +396,17 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
                     ),
                     const Divider(),
                     
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _phoneController,
+                      keyboardType: TextInputType.phone,
+                      decoration: InputDecoration(
+                        labelText: 'Contact Number (for SMS updates)',
+                        hintText: 'e.g., 9876543210',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        prefixIcon: const Icon(Icons.phone),
+                      ),
+                    ),
                     const SizedBox(height: 16),
                     const Text('Vessel Information', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 12),
@@ -304,8 +456,20 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
                         labelText: 'Additional Details / Description',
                         alignLabelWithHint: true,
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _isListening ? Icons.mic : Icons.mic_none,
+                            color: _isListening ? Colors.red : Colors.grey,
+                          ),
+                          onPressed: _listenToSpeech,
+                        ),
                       ),
-                      validator: (value) => value!.isEmpty ? 'Please provide a brief description' : null,
+                      validator: (value) {
+                        if (value!.isEmpty && (_audioPath == null || _audioPath!.isEmpty)) {
+                          return 'Please provide a description or record voice evidence';
+                        }
+                        return null;
+                      },
                     ),
   
                     const SizedBox(height: 24),
@@ -342,37 +506,82 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
                     ),
   
                     const SizedBox(height: 24),
-                    const Text('Location', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
+                    const Text('Voice Evidence', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 12),
                     
-                    // Location Status
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: _currentPosition != null ? Colors.green.shade50 : Colors.red.shade50,
+                        color: Colors.grey.shade100,
+                        border: Border.all(color: Colors.grey.shade300),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: _currentPosition != null ? Colors.green.shade200 : Colors.red.shade200)
                       ),
                       child: Row(
                         children: [
-                          Icon(
-                            _currentPosition != null ? Icons.check_circle : Icons.gps_fixed, 
-                            color: _currentPosition != null ? Colors.green : Colors.red
+                          IconButton(
+                            icon: Icon(_isRecording ? Icons.stop_circle : Icons.mic, color: _isRecording ? Colors.red : Colors.blue, size: 36),
+                            onPressed: _isRecording ? _stopRecording : _startRecording,
                           ),
-                          const SizedBox(width: 12),
+                          const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                               _currentPosition != null 
-                                ? 'Location captured: ${_currentPosition!.latitude.toStringAsFixed(4)}, ${_currentPosition!.longitude.toStringAsFixed(4)}'
-                                : 'Fetching GPS Location...',
-                               style: TextStyle(
-                                 fontWeight: FontWeight.bold,
-                                 color: _currentPosition != null ? Colors.green.shade700 : Colors.red.shade700
-                               ),
+                              _isRecording ? "Recording..." : (_audioPath != null ? "Voice Evidence Recorded!" : "Tap to record voice evidence"),
+                              style: TextStyle(color: _isRecording ? Colors.red : Colors.grey.shade800, fontWeight: FontWeight.bold),
                             ),
-                          )
-                        ],
-                      ),
+                          ),
+                          if (_audioPath != null) ...[
+                             IconButton(
+                               icon: Icon(_isPlaying ? Icons.pause_circle : Icons.play_circle, color: Colors.green, size: 36),
+                               onPressed: _playAudio,
+                             ),
+                             IconButton(
+                               icon: Icon(Icons.delete, color: Colors.red, size: 36),
+                               onPressed: _deleteAudio,
+                             ),
+                          ]
+                        ]
+                      )
+                    ),
+
+                    const SizedBox(height: 24),
+                    const Text('Location', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    
+                    Autocomplete<Map<String, dynamic>>(
+                      displayStringForOption: (option) => option['name'] as String,
+                      optionsBuilder: (TextEditingValue textEditingValue) async {
+                        return await _searchLocations(textEditingValue.text);
+                      },
+                      onSelected: (Map<String, dynamic> selection) {
+                        setState(() {
+                          _selectedLocationData = selection;
+                        });
+                      },
+                      fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
+                        return TextFormField(
+                          controller: textEditingController,
+                          focusNode: focusNode,
+                          onEditingComplete: onFieldSubmitted,
+                          decoration: InputDecoration(
+                            labelText: 'Search Incident Location (e.g., "Panjim")',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                            prefixIcon: const Icon(Icons.location_on),
+                            suffixIcon: _selectedLocationData != null 
+                                ? const Icon(Icons.check_circle, color: Colors.green)
+                                : (_isSearchingLocation 
+                                    ? const Padding(padding: EdgeInsets.all(12), child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)))
+                                    : const Icon(Icons.search)),
+                          ),
+                          onChanged: (value) {
+                             if (_selectedLocationData != null && value != _selectedLocationData!['name']) {
+                                setState(() {
+                                   _selectedLocationData = null; // Reset if they alter the selected text
+                                });
+                             }
+                          },
+                          validator: (value) => _selectedLocationData == null ? 'Please select a predefined location' : null,
+                        );
+                      },
                     ),
   
                     const SizedBox(height: 32),
@@ -390,11 +599,138 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
                         ),
                       ),
-                    )
+                    ),
                   ],
                 ),
+              ))),
+          // Tab 2: My Reports List
+          _buildMyReports(),
+        ],
+      ),
+    ),
+  );
+}
+
+  Widget _buildMyReports() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('complaints')
+          .where('originalFarmerName', isEqualTo: widget.farmerName)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.history, size: 64, color: Colors.grey),
+                SizedBox(height: 16),
+                Text('You haven\'t submitted any reports yet.', style: TextStyle(color: Colors.grey)),
+              ],
+            ),
+          );
+        }
+
+        // Sort in-memory to avoid requiring a composite index
+        final docs = snapshot.data!.docs;
+        docs.sort((a, b) {
+          final aTime = (a.data() as Map<String, dynamic>)['timestamp'] as Timestamp?;
+          final bTime = (b.data() as Map<String, dynamic>)['timestamp'] as Timestamp?;
+          if (aTime == null) return 1;
+          if (bTime == null) return -1;
+          return bTime.compareTo(aTime); // Descending
+        });
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: docs.length,
+          itemBuilder: (context, index) {
+            final data = docs[index].data() as Map<String, dynamic>;
+            return _buildAcknowledgementCard(data);
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildAcknowledgementCard(Map<String, dynamic> data) {
+    String status = data['status'] ?? 'Pending';
+    Color statusColor = status == 'Action Taken' ? Colors.green : (status == 'Dismissed' ? Colors.red : Colors.orange);
+    DateTime? date = data['timestamp'] != null ? (data['timestamp'] as Timestamp).toDate() : null;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    data['activityType'] ?? 'Unknown Activity',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: statusColor),
+                  ),
+                  child: Text(
+                    status,
+                    style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (date != null)
+              Text(
+                "Submitted on: ${date.day}/${date.month}/${date.year}",
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
               ),
-            )),
+            const Divider(height: 24),
+            if (data['acknowledgementMessage'] != null) ...[
+              const Text(
+                "Message from Authority:",
+                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blueAccent, fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  data['acknowledgementMessage'],
+                  style: const TextStyle(height: 1.4),
+                ),
+              ),
+            ] else ...[
+              const Row(
+                children: [
+                   Icon(Icons.hourglass_empty, size: 16, color: Colors.grey),
+                   SizedBox(width: 8),
+                   Text("Waiting for authority response...", style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic)),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 
@@ -439,7 +775,7 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
             ),
             const SizedBox(height: 16),
             Text(
-              'Your complaint has been recorded and will be reviewed by the authorities.',
+              'Your complaint has been recorded and will be reviewed by the authorities. You can track progress in the "My Reports" tab.',
               style: TextStyle(fontSize: 16, color: Colors.grey.shade700, height: 1.5),
               textAlign: TextAlign.center,
             ),
