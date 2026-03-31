@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'dart:math' as math;
 import '../services/notification_service.dart';
 import '../widgets/weather_widget.dart';
@@ -16,6 +17,10 @@ class IotMonitoringScreen extends StatefulWidget {
 }
 
 class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
+  DatabaseReference _getDbRef() {
+    return FirebaseDatabase.instance.ref('water_parameters');
+  }
+
   Map<String, String> _lastAlertedIssues = {"Tilapia": "", "Asian Seabass": ""};
 
   void _checkAndAlert(double currentRisk, BuildContext context, String species, List<String> issues) {
@@ -111,17 +116,19 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
   Widget build(BuildContext context) {
     return Container(
       color: const Color(0xFFF8FAFC),
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'IoT Real-time Monitoring',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 24),
-          Expanded(
-            child: StreamBuilder<DatabaseEvent>(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const WeatherWidget(),
+            const SizedBox(height: 24),
+            const Text(
+              'IoT Real-time Monitoring',
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+            ),
+            const SizedBox(height: 16),
+            StreamBuilder<DatabaseEvent>(
               stream: _getDbRef().onValue,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
