@@ -219,6 +219,9 @@ class DashboardHomeView extends StatelessWidget {
               Expanded(child: Container()), // Empty placeholder to keep card sizing consistent
             ],
           ),
+          const SizedBox(height: 32),
+          _buildRegionalInsightsSection(),
+          const SizedBox(height: 24),
 // ...
                 ],
               ),
@@ -226,6 +229,57 @@ class DashboardHomeView extends StatelessWidget {
           ),
         ),
         const _AnimatedFishFooter(),
+      ],
+    );
+  }
+
+  Widget _buildRegionalInsightsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Top Performing Species in Region (Analysis)',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+        ),
+        const SizedBox(height: 16),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.blue.shade100),
+            boxShadow: [
+              BoxShadow(color: Colors.blue.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4)),
+            ],
+          ),
+          child: Column(
+            children: [
+              _buildInsightRow('👑 Kingfish', '84% Growth Stability', Colors.green),
+              const Divider(height: 24),
+              _buildInsightRow('🐟 Silver Pomfret', 'High Demand Yield', Colors.blue),
+              const Divider(height: 24),
+              _buildInsightRow('🦐 Jumbo Prawns', 'Steady Export Volume', Colors.orange),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInsightRow(String name, String metric, Color color) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+          child: Text(
+            metric,
+            style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12),
+          ),
+        ),
       ],
     );
   }

@@ -2,6 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:math' as math;
 import '../services/notification_service.dart';
+import '../widgets/weather_widget.dart';
+import '../services/ai_species_service.dart';
+import '../services/weather_service.dart';
+import 'package:geolocator/geolocator.dart';
+import 'fish_directory_screen.dart';
+
 class IotMonitoringScreen extends StatefulWidget {
   const IotMonitoringScreen({super.key});
 
@@ -115,22 +121,27 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
           ),
           const SizedBox(height: 24),
           Expanded(
-            child: StreamBuilder<DocumentSnapshot>(
-              stream: FirebaseFirestore.instance.collection('water_parameters').doc('2pBQE1SbutGXrRT6NjjA').snapshots(),
+            child: StreamBuilder<DatabaseEvent>(
+              stream: _getDbRef().onValue,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const Center(child: Padding(
+                    padding: EdgeInsets.all(40.0),
+                    child: CircularProgressIndicator(),
+                  ));
                 }
 
                 if (snapshot.hasError) {
                   return Center(child: Text("Error: ${snapshot.error}"));
                 }
 
-                if (!snapshot.hasData || !snapshot.data!.exists) {
+                if (!snapshot.hasData ||
+                    snapshot.data!.snapshot.value == null) {
                   return const Center(child: Text("No sensor data found"));
                 }
 
-                final Map<String, dynamic> values = snapshot.data!.data() as Map<String, dynamic>;
+                final Map<dynamic, dynamic> values =
+                    snapshot.data!.snapshot.value as Map<dynamic, dynamic>;
 
                 final sensorData = {
                   "turbidity": double.tryParse(values['turbidity']?.toString() ?? '0') ?? 0.0,
@@ -138,9 +149,196 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
                   "ph": double.tryParse((values['pH'] ?? values['ph'])?.toString() ?? '0') ?? 0.0,
                 };
 
-                return _buildSensorCard(sensorData);
+                return Column(
+                  children: [
+                    _buildSensorCard(sensorData),
+                    const SizedBox(height: 24),
+                    _buildRecommendationSection(sensorData['temperature'] as double),
+                  ],
+                );
               },
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRecommendationSection(double currentTemp) {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _fetchAiRecommendations(),
+      initialData: AISpeciesService.getFallbackRecommendations(currentTemp),
+      builder: (context, snapshot) {
+        final List<Map<String, dynamic>> recommendations = snapshot.data ?? [];
+        final bool isSyncing = snapshot.connectionState == ConnectionState.waiting;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      '🐟 Best Species for Today',
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                    ),
+                    if (!isSyncing)
+                       Container(
+                        margin: const EdgeInsets.only(top: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.green.shade50,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: Colors.green.shade100),
+                        ),
+                        child: Text(
+                          'LIVE AI VERIFIED',
+                          style: TextStyle(color: Colors.green.shade700, fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+                        ),
+                      ),
+                  ],
+                ),
+                TextButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const FishDirectoryScreen()),
+                    );
+                  },
+                  child: const Text('View All', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            
+            SizedBox(
+              height: 200,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: recommendations.length,
+                separatorBuilder: (context, index) => const SizedBox(width: 16),
+                itemBuilder: (context, index) {
+                  final item = recommendations[index];
+                  return _buildSpeciesCard(
+                    name: item['name'],
+                    sub: item['sub'],
+                    price: item['price'],
+                    rating: item['rating'],
+                    trend: item['trend'],
+                    icon: item['icon'],
+                    trendIcon: _getTrendIcon(item['trendIcon']),
+                    bestTime: item['bestTime'],
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+
+  IconData _getTrendIcon(String? trend) {
+    switch (trend?.toLowerCase()) {
+      case 'up': return Icons.trending_up;
+      case 'down': return Icons.trending_down;
+      default: return Icons.trending_flat;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchAiRecommendations() async {
+    try {
+      final weatherService = WeatherService();
+      
+      // Default to Panjim coords
+      double lat = 15.4909;
+      double lng = 73.8278;
+      
+      try {
+        final pos = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.low,
+          timeLimit: const Duration(seconds: 2),
+        );
+        lat = pos.latitude;
+        lng = pos.longitude;
+      } catch (_) {}
+
+      final weather = await weatherService.fetchWeatherData(lat: lat, lng: lng);
+      
+      return await AISpeciesService.getLiveRecommendations(
+        temp: (weather['temp'] as num).toDouble(),
+        waveHeight: (weather['wave_height'] as num).toDouble(),
+        windSpeed: (weather['wind_speed'] as num).toDouble(),
+        condition: weather['condition'],
+        location: weather['location'],
+      );
+    } catch (e) {
+      debugPrint('Error fetching AI recommendations: $e');
+      rethrow;
+    }
+  }
+
+  Widget _buildSpeciesCard({
+    required String name,
+    required String sub,
+    required String price,
+    required int rating,
+    required String trend,
+    required String icon,
+    required IconData trendIcon,
+    required String bestTime,
+  }) {
+    return Container(
+      width: 240,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(icon, style: const TextStyle(fontSize: 24)),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(8)),
+                child: Text(price, style: TextStyle(color: Colors.blue.shade800, fontWeight: FontWeight.bold, fontSize: 12)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          Text(sub, style: TextStyle(color: Colors.grey.shade600, fontSize: 11)),
+          const SizedBox(height: 12),
+          Row(
+            children: List.generate(5, (i) => Icon(Icons.star, size: 12, color: i < rating ? Colors.orange : Colors.grey.shade300)),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Icon(trendIcon, size: 14, color: Colors.blueGrey),
+              const SizedBox(width: 4),
+              Expanded(child: Text(trend, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis)),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              const Icon(Icons.access_time, size: 14, color: Colors.orange),
+              const SizedBox(width: 4),
+              Text('Time: $bestTime', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600)),
+            ],
           ),
         ],
       ),

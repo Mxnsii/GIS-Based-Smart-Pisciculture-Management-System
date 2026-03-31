@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:geolocator/geolocator.dart';
+import 'dart:ui';
 import '../services/weather_service.dart';
 
 class WeatherWidget extends StatefulWidget {
@@ -9,14 +11,62 @@ class WeatherWidget extends StatefulWidget {
   State<WeatherWidget> createState() => _WeatherWidgetState();
 }
 
-class _WeatherWidgetState extends State<WeatherWidget> {
+class _WeatherWidgetState extends State<WeatherWidget> with SingleTickerProviderStateMixin {
   late Future<Map<String, dynamic>> _weatherFuture;
   final WeatherService _weatherService = WeatherService();
+  late AnimationController _pulseController;
 
   @override
   void initState() {
     super.initState();
-    _weatherFuture = _weatherService.fetchWeather('Panjim, Goa');
+    _weatherFuture = _initWeather();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  Future<Map<String, dynamic>> _initWeather() async {
+    try {
+      // Direct Sensing Attempt
+      Position position = await _determinePosition();
+      return _weatherService.fetchWeatherData(
+        lat: position.latitude, 
+        lng: position.longitude,
+      );
+    } catch (e) {
+      // Explicitly mark as sensing failure but fetch Panjim as a secondary background fallback
+      final fallback = await _weatherService.fetchWeatherData(lat: 15.4909, lng: 73.8278);
+      return {
+        ...fallback,
+        'location': 'ENABLE GPS FOR LIVE UPDATES',
+        'isGPSDenied': true,
+      };
+    }
+  }
+
+  Future<Position> _determinePosition() async {
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) return Future.error('Location services disabled.');
+
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) return Future.error('Permission denied.');
+    }
+    
+    if (permission == LocationPermission.deniedForever) return Future.error('Permissions permanently denied.');
+
+    return await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
   }
 
   @override
@@ -25,186 +75,260 @@ class _WeatherWidgetState extends State<WeatherWidget> {
       future: _weatherFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return _buildLoadingValues();
+          // Show skeleton/placeholder instead of loading screen
+          return _buildPremiumWeatherCard({
+            'location': 'Sensing Location...',
+            'temp': 0,
+            'condition': 'Loading',
+            'humidity': 0,
+            'wind_speed': 0,
+            'wave_height': 0,
+            'isLoading': true,
+          });
         } else if (snapshot.hasError) {
           return _buildErrorView();
         } else if (snapshot.hasData) {
           final data = snapshot.data!;
-          final temp = (data['main']['temp'] as num).round();
-          final humidity = data['main']['humidity'];
-          final windSpeed = data['wind']['speed'];
-          final condition = data['weather'][0]['main'];
-          final location = data['name'];
-
-          return _buildWeatherCard(
-            location: location,
-            temperature: temp,
-            condition: condition,
-            humidity: humidity,
-            windSpeed: windSpeed.toDouble(),
-          );
+          return _buildPremiumWeatherCard(data);
         }
         return _buildErrorView();
       },
     );
   }
 
-  Widget _buildLoadingValues() {
-    return Container(
-      height: 120, // Match Approx Height
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.blue.shade300,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: const Center(
-        child: CircularProgressIndicator(color: Colors.white),
-      ),
-    );
-  }
-
   Widget _buildErrorView() {
-    // Fallback to mock data if error (to keep UI looking good during dev without API key)
-    return _buildWeatherCard(
-      location: "Panjim, Goa (Offline)",
-      temperature: 28,
-      condition: "Sunny",
-      humidity: 65,
-      windSpeed: 12.5,
-      isError: true,
-    );
+    return _buildPremiumWeatherCard({
+      'location': "Panjim, Goa (Offline)",
+      'temp': 28,
+      'condition': "Sunny",
+      'humidity': 65,
+      'wind_speed': 12.5,
+      'wave_height': 0.8,
+      'isError': true,
+    });
   }
 
-  Widget _buildWeatherCard({
-    required String location,
-    required int temperature,
-    required String condition,
-    required int humidity,
-    required double windSpeed,
-    bool isError = false,
-  }) {
+  Widget _buildPremiumWeatherCard(Map<String, dynamic> data) {
+    final bool isError = data['isError'] ?? false;
+    final bool isLoading = data['isLoading'] ?? false;
+    final int temp = (data['temp'] as num).round();
+    final int humidity = data['humidity'];
+    final double windSpeed = (data['wind_speed'] as num).toDouble();
+    final double waveHeight = (data['wave_height'] as num).toDouble();
+    final String condition = data['condition'];
+    final String location = data['location'];
+
+    // Industry Risk Score Logic
+    final double riskScore = (windSpeed * 0.6) + (waveHeight * 20);
+    
+    Color riskColor;
+    String riskStatus;
+    String advisory;
+    IconData riskIcon;
+
+    if (isLoading) {
+      riskColor = Colors.white24;
+      riskStatus = 'ACQUIRING GPS...';
+      advisory = '🛰️ DIRECT SENSING ACTIVATED';
+      riskIcon = Icons.gps_fixed;
+    } else if (riskScore > 50) {
+      riskColor = Colors.redAccent;
+      riskStatus = 'DANGER';
+      advisory = '❌ AVOID FISHING - High Sea Risk';
+      riskIcon = Icons.gavel_rounded;
+    } else if (riskScore >= 25) {
+      riskColor = Colors.orangeAccent;
+      riskStatus = 'MODERATE';
+      advisory = '⚠️ PROCEED WITH CAUTION';
+      riskIcon = Icons.warning_rounded;
+    } else {
+      riskColor = Colors.greenAccent;
+      riskStatus = 'SAFE';
+      advisory = '✅ IDEAL FOR FISHING';
+      riskIcon = Icons.check_circle_rounded;
+    }
+
     return Container(
-      padding: const EdgeInsets.all(16),
+      // Remove fixed height to fix overflow
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: isError 
-            ? [Colors.grey.shade400, Colors.grey.shade600] 
-            : [Colors.blue.shade400, Colors.blue.shade800],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(24),
         boxShadow: [
-          BoxShadow(
-            color: Colors.blue.withOpacity(0.3),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
+          BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 20, offset: const Offset(0, 10)),
         ],
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // Left: Location & Date
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const Icon(Icons.location_on, color: Colors.white, size: 16),
-                  const SizedBox(width: 4),
-                  Text(
-                    location,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Text(
-                DateFormat('EEE, MMM d').format(DateTime.now()),
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.9),
-                  fontSize: 14,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Stack(
+          children: [
+            // Background Gradient
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: isError || isLoading 
+                    ? [Colors.blue.shade900, Colors.blue.shade700]
+                    : [Colors.blue.shade800, Colors.blue.shade400],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
               ),
-            ],
-          ),
-
-          // Center: Temperature & Icon
-          Row(
-            children: [
-              Icon(_getWeatherIcon(condition), color: Colors.yellow, size: 40),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Column(
+                mainAxisSize: MainAxisSize.min, // Allow content to determine size
                 children: [
-                  Text(
-                    '$temperature°C',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  // TOP ROW: Location & Metrics
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(isLoading ? Icons.gps_fixed : Icons.location_on, color: Colors.white, size: 20),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    location.toUpperCase(),
+                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18, letterSpacing: 0.5),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              DateFormat('EEEE, d MMMM yyyy').format(DateTime.now()),
+                              style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 12, fontWeight: FontWeight.w500),
+                            ),
+                            const SizedBox(height: 16),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Icon(_getWeatherIcon(condition), color: Colors.yellowAccent, size: 48),
+                                const SizedBox(width: 16),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      isLoading ? '--' : '$temp°C',
+                                      style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.bold),
+                                    ),
+                                    Text(
+                                      isLoading ? 'SENSING...' : condition.toUpperCase(),
+                                      style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 13, fontWeight: FontWeight.w800, letterSpacing: 1),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Right Hand Stats
+                      Column(
+                        mainAxisAlignment: MainAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                           IconButton(
+                             icon: const Icon(Icons.refresh, color: Colors.white, size: 20),
+                             onPressed: () {
+                               setState(() {
+                                 _weatherFuture = _initWeather();
+                               });
+                             },
+                             tooltip: 'Re-sense Location',
+                           ),
+                           _buildMiniStat(Icons.water_drop, isLoading ? '--' : '$humidity%', 'HUMIDITY'),
+                           const SizedBox(height: 12),
+                           _buildMiniStat(Icons.air, isLoading ? '--' : '${windSpeed.toStringAsFixed(1)} km/h', 'WIND'),
+                           const SizedBox(height: 12),
+                           _buildMiniStat(Icons.waves, isLoading ? '--' : '${waveHeight.toStringAsFixed(1)} m', 'WAVES'),
+                        ],
+                       ),
+                    ],
                   ),
-                  Text(
-                    condition,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
+                  
+                  const SizedBox(height: 20),
+                  
+                  // BOTTOM SECTION: Risk Score & Advisory
+                  Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'MARITIME RISK INDEX',
+                            style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1),
+                          ),
+                          Flexible(
+                            child: Text(
+                              advisory,
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                              textAlign: TextAlign.right,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Stack(
+                        children: [
+                          Container(
+                            height: 6,
+                            decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), borderRadius: BorderRadius.circular(3)),
+                          ),
+                          FractionallySizedBox(
+                            widthFactor: isLoading ? 0.3 : (riskScore / 100).clamp(0.0, 1.0),
+                            child: Container(
+                              height: 6,
+                              decoration: BoxDecoration(
+                                color: riskColor,
+                                borderRadius: BorderRadius.circular(3),
+                                boxShadow: [
+                                  if (!isLoading) BoxShadow(color: riskColor.withOpacity(0.5), blurRadius: 4, spreadRadius: 1)
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ],
-          ),
-
-          // Right: Details (Humidity/Wind)
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              _buildDetailItem(Icons.water_drop, '$humidity%', 'Humidity'),
-              const SizedBox(height: 4),
-              _buildDetailItem(Icons.air, '${windSpeed}km/h', 'Wind'),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildDetailItem(IconData icon, String value, String label) {
-    return Row(
+  Widget _buildMiniStat(IconData icon, String value, String label) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        Icon(icon, color: Colors.white70, size: 14),
-        const SizedBox(width: 4),
-        Text(
-          value,
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 14,
-          ),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: Colors.white70, size: 12),
+            const SizedBox(width: 4),
+            Text(value, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+          ],
         ),
+        Text(label, style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 8, fontWeight: FontWeight.w900)),
       ],
     );
   }
-  
+
   IconData _getWeatherIcon(String condition) {
     switch (condition.toLowerCase()) {
-      case 'clouds':
-      case 'rain':
-      case 'drizzle':
-      case 'thunderstorm':
-        return Icons.cloud;
-      case 'clear':
-        return Icons.wb_sunny;
-      default:
-        return Icons.wb_cloudy_outlined;
+      case 'clear': return Icons.wb_sunny;
+      case 'partly cloudy': return Icons.wb_cloudy;
+      case 'clouds': return Icons.cloud;
+      case 'rain': return Icons.beach_access;
+      case 'thunderstorm': return Icons.thunderstorm;
+      default: return Icons.wb_cloudy_outlined;
     }
   }
 }

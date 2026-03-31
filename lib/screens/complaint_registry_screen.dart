@@ -126,7 +126,15 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
     try {
       if (await _audioRecorder.hasPermission()) {
         final String path = kIsWeb ? '' : '${Directory.systemTemp.path}/complaint_audio.m4a';
-        await _audioRecorder.start(const RecordConfig(), path: path); 
+        // Optimize for size: 32kbps mono is plenty for voice and keeps Firestore doc under 1MB
+        await _audioRecorder.start(
+          const RecordConfig(
+            encoder: AudioEncoder.aacLc,
+            bitRate: 32000, 
+            numChannels: 1,
+          ), 
+          path: path
+        ); 
         setState(() {
           _isRecording = true;
           _audioPath = null;
@@ -172,9 +180,9 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
   Future<void> _pickImage() async {
     final pickedFile = await ImagePicker().pickImage(
       source: ImageSource.camera,
-      imageQuality: 30, // Compress image to 30% quality to stay under 1MB Firestore limit
-      maxWidth: 600,    // Resize width
-      maxHeight: 600,   // Resize height
+      imageQuality: 15, // Aggressive compression (15%) to stay under 1MB Firestore limit
+      maxWidth: 450,    // Reduced width for smaller Base64 payload
+      maxHeight: 450,   // Reduced height
     );
     if (pickedFile != null) {
       if (kIsWeb) {
@@ -219,6 +227,41 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
     
     if (mounted) setState(() => _isSearchingLocation = false);
     return const Iterable<Map<String, dynamic>>.empty();
+  }
+
+  Future<void> _detectCurrentLocation() async {
+    setState(() => _isSearchingLocation = true);
+    try {
+      Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+      // Reverse geocode using Nominatim
+      final url = Uri.parse('https://nominatim.openstreetmap.org/reverse?lat=${position.latitude}&lon=${position.longitude}&format=json');
+      final response = await http.get(url, headers: {'User-Agent': 'GIS_Smart_Pisciculture_App'});
+      
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        setState(() {
+          _selectedLocationData = {
+            'name': data['display_name'] ?? "Current GPS Location",
+            'lat': position.latitude,
+            'lng': position.longitude,
+          };
+        });
+        // Success feedback
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('📍 Location detected successfully!'), backgroundColor: Colors.green),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error detecting location: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSearchingLocation = false);
+    }
   }
 
   Future<void> _submitComplaint() async {
@@ -401,7 +444,7 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
                       controller: _phoneController,
                       keyboardType: TextInputType.phone,
                       decoration: InputDecoration(
-                        labelText: 'Contact Number (for SMS updates)',
+                        labelText: 'Contact Number',
                         hintText: 'e.g., 9876543210',
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                         prefixIcon: const Icon(Icons.phone),
@@ -560,19 +603,33 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
                         });
                       },
                       fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
+                        // Sync controller if external selection happens (like Detect Location)
+                        if (_selectedLocationData != null && textEditingController.text != _selectedLocationData!['name']) {
+                           textEditingController.text = _selectedLocationData!['name'];
+                        }
+
                         return TextFormField(
                           controller: textEditingController,
                           focusNode: focusNode,
                           onEditingComplete: onFieldSubmitted,
                           decoration: InputDecoration(
-                            labelText: 'Search Incident Location (e.g., "Panjim")',
+                            labelText: 'Search Location',
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                             prefixIcon: const Icon(Icons.location_on),
-                            suffixIcon: _selectedLocationData != null 
-                                ? const Icon(Icons.check_circle, color: Colors.green)
-                                : (_isSearchingLocation 
-                                    ? const Padding(padding: EdgeInsets.all(12), child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)))
-                                    : const Icon(Icons.search)),
+                            suffixIcon: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (_selectedLocationData != null) 
+                                  const Icon(Icons.check_circle, color: Colors.green),
+                                if (_isSearchingLocation)
+                                   const Padding(padding: EdgeInsets.all(12), child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
+                                IconButton(
+                                  icon: Icon(Icons.my_location, color: _isSearchingLocation ? Colors.blue : Colors.blueGrey),
+                                  onPressed: _isSearchingLocation ? null : _detectCurrentLocation,
+                                  tooltip: 'Use current location',
+                                ),
+                              ],
+                            ),
                           ),
                           onChanged: (value) {
                              if (_selectedLocationData != null && value != _selectedLocationData!['name']) {
