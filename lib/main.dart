@@ -8,6 +8,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'services/notification_service.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
+import 'package:flutter/foundation.dart'; // Add this at the top for kIsWeb
+
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
@@ -28,8 +30,14 @@ void main() async {
       badge: true,
       sound: true,
     );
-    await messaging.subscribeToTopic('farmer_alerts');
-    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+    
+    if (!kIsWeb) {
+      // Background notifications and manual topic subscriptions are 
+      // strictly reserved for native Android/iOS mobile environments
+      await messaging.subscribeToTopic('farmer_alerts');
+      FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+    }
+
   } catch (e) {
     debugPrint("Firebase init error: $e");
   }

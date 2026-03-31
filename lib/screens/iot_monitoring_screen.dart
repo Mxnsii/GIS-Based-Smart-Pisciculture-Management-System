@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:math' as math;
 import '../services/notification_service.dart';
 class IotMonitoringScreen extends StatefulWidget {
   const IotMonitoringScreen({super.key});
@@ -165,9 +166,33 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _buildMetric('Turbidity', turbidityVal.toStringAsFixed(1), Icons.blur_on),
-                  _buildMetric('Temperature', tempVal.toStringAsFixed(1), Icons.thermostat),
-                  _buildMetric('pH', phVal.toStringAsFixed(1), Icons.water_drop),
+                  SpeedometerGauge(
+                    title: 'Turbidity',
+                    value: turbidityVal,
+                    min: 0,
+                    max: 40,
+                    unit: ' NTU',
+                    gradientColors: const [Colors.red, Colors.green, Colors.green, Colors.yellow, Colors.orange, Colors.red],
+                    gradientStops: const [0.0, 0.49, 0.5, 0.75, 0.8125, 1.0],
+                  ),
+                  SpeedometerGauge(
+                    title: 'Temp',
+                    value: tempVal,
+                    min: 15,
+                    max: 45,
+                    unit: '°C',
+                    gradientColors: const [Colors.red, Colors.red, Colors.red, Colors.yellow, Colors.green, Colors.green, Colors.yellow, Colors.red],
+                    gradientStops: const [0.0, 0.49, 0.5, 0.6, 0.65, 0.78, 0.83, 1.0],
+                  ),
+                  SpeedometerGauge(
+                    title: 'pH',
+                    value: phVal,
+                    min: 0,
+                    max: 14,
+                    unit: '',
+                    gradientColors: const [Colors.red, Colors.red, Colors.red, Colors.yellow, Colors.green, Colors.green, Colors.yellow, Colors.red],
+                    gradientStops: const [0.0, 0.49, 0.5, 0.675, 0.73, 0.82, 0.875, 1.0],
+                  ),
                 ],
               ),
   
@@ -180,22 +205,6 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildMetric(String label, String value, IconData icon) {
-    return Column(
-      children: [
-        Icon(icon, size: 28, color: Colors.blue),
-        const SizedBox(height: 8),
-        Text(
-          value,
-          style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold),
-        ),
-        Text(label, style: TextStyle(color: Colors.grey.shade600)),
-      ],
     );
   }
 
@@ -333,5 +342,130 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
         );
       },
     );
+  }
+}
+
+class SpeedometerGauge extends StatelessWidget {
+  final double value;
+  final double min;
+  final double max;
+  final String title;
+  final String unit;
+  final List<Color> gradientColors;
+  final List<double> gradientStops;
+
+  const SpeedometerGauge({
+    Key? key,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.title,
+    required this.unit,
+    required this.gradientColors,
+    required this.gradientStops,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: 90,
+          height: 60,
+          child: CustomPaint(
+            painter: _SpeedometerPainter(
+              value: value,
+              min: min,
+              max: max,
+              gradientColors: gradientColors,
+              gradientStops: gradientStops,
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          '${value.toStringAsFixed(1)}$unit',
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        Text(
+          title,
+          style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+        ),
+      ],
+    );
+  }
+}
+
+class _SpeedometerPainter extends CustomPainter {
+  final double value;
+  final double min;
+  final double max;
+  final List<Color> gradientColors;
+  final List<double> gradientStops;
+
+  _SpeedometerPainter({
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.gradientColors,
+    required this.gradientStops,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    Offset center = Offset(size.width / 2, size.height);
+    double radius = size.width / 2;
+    Rect rect = Rect.fromCircle(center: center, radius: radius);
+
+    Paint gradientPaint = Paint()
+      ..shader = SweepGradient(
+        startAngle: 0.0,
+        endAngle: 2 * math.pi,
+        colors: gradientColors,
+        stops: gradientStops,
+      ).createShader(rect)
+      ..strokeWidth = 12
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    // Background track (so we see the full semi-circle clearly)
+    Paint bgTrackPaint = Paint()
+      ..color = Colors.grey.shade200
+      ..strokeWidth = 12
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+    canvas.drawArc(rect, math.pi, math.pi, false, bgTrackPaint);
+
+    // Draw full gauge gradient arc over the background
+    canvas.drawArc(rect, math.pi, math.pi, false, gradientPaint);
+
+    // Draw needle
+    double clampedValue = value.clamp(min, max);
+    double sweepAngle = math.pi * ((clampedValue - min) / (max - min));
+    double needleAngle = math.pi + sweepAngle;
+    
+    Paint needlePaint = Paint()
+      ..color = Colors.blueGrey.shade900
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round;
+
+    Offset needleTip = Offset(
+      center.dx + (radius - 5) * math.cos(needleAngle),
+      center.dy + (radius - 5) * math.sin(needleAngle),
+    );
+
+    canvas.drawLine(center, needleTip, needlePaint);
+
+    // Draw center pivot
+    Paint pivotPaint = Paint()..color = Colors.blueGrey.shade900;
+    canvas.drawCircle(center, 5, pivotPaint);
+    Paint innerPivotPaint = Paint()..color = Colors.white;
+    canvas.drawCircle(center, 2, innerPivotPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _SpeedometerPainter oldDelegate) {
+    return oldDelegate.value != value;
   }
 }
