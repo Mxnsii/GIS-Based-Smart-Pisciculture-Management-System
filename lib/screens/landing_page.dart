@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'login_screen.dart';
+import '../services/ml_prediction_service.dart';
 
 class LandingPage extends StatefulWidget {
   const LandingPage({super.key});
@@ -19,10 +20,26 @@ class _LandingPageState extends State<LandingPage> {
     'assets/images/display2.png',
     'assets/images/display3.png',
   ];
+  void testPrediction() async {
+  try {
+    String result = await MlPredictionService.getPrediction(
+      species: "Tilapia",
+      temperature: 31,
+      ph: 6.2,
+      turbidity: 30,
+      dissolvedOxygen: 4,
+    );
+
+    print("Prediction: $result");
+  } catch (e) {
+    print("Error: $e");
+  }
+}
 
   @override
   void initState() {
     super.initState();
+    testPrediction(); 
     // Auto-swipe the carousel every 3 seconds
     _timer = Timer.periodic(const Duration(seconds: 4), (Timer timer) {
       if (_currentPage < _carouselImages.length - 1) {

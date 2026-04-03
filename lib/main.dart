@@ -8,6 +8,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'services/notification_service.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart'; // Add this at the top for kIsWeb
 
 @pragma('vm:entry-point')

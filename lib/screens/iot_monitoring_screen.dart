@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:math' as math;
 import '../services/notification_service.dart';
+import '../services/ml_prediction_service.dart';
 import '../widgets/weather_widget.dart';
 import '../services/ai_species_service.dart';
 import '../services/weather_service.dart';
@@ -18,18 +19,14 @@ class IotMonitoringScreen extends StatefulWidget {
 class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
   Map<String, String> _lastAlertedIssues = {"Tilapia": "", "Asian Seabass": ""};
 
-  void _checkAndAlert(double currentRisk, BuildContext context, String species, List<String> issues) {
-    String currentIssuesStr = issues.join(",");
-
-    if (currentRisk >= 33.0 && _lastAlertedIssues[species] != currentIssuesStr) {
-      _lastAlertedIssues[species] = currentIssuesStr;
-
-      String issueText = issues.isNotEmpty ? issues.join(", ") : 'Parameters exceeded safety threshold';
+  void _checkAndAlert(bool isDangerous, BuildContext context, String species, String disease) {
+    if (isDangerous && _lastAlertedIssues[species] != disease) {
+      _lastAlertedIssues[species] = disease;
 
       NotificationService.showNotification(
         id: species.hashCode,
-        title: '⚠️ $species Alert',
-        body: 'Critical Issue: $issueText',
+        title: '⚠️ AI Alert: $species',
+        body: 'Disease Predicted: $disease',
       );
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -40,69 +37,38 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               title: Row(
                 children: const [
-                  Icon(Icons.warning_amber_rounded, color: Colors.red, size: 28),
+                  Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
                   SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'HIGH RISK ALERT',
-                      style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                      'AI RISK PREDICTION',
+                      style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ],
               ),
               content: Text(
-                'Critical issues detected for $species:\n\n• ${issues.join("\n• ")}\n\nPlease check the water conditions immediately.',
+                'The ML model has predicted a high risk of disease for $species based on current water parameters:\n\n• Predicted: $disease\n\nPlease check the water conditions immediately.',
                 style: const TextStyle(fontSize: 16),
               ),
               actions: [
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red,
+                      backgroundColor: Colors.orange,
                       foregroundColor: Colors.white),
                   onPressed: () {
                     Navigator.of(context).pop();
                   },
-                  child: const Text('OK'),
+                  child: const Text('Acknowledge'),
                 ),
               ],
             );
           },
         );
       });
-    } else if (currentRisk < 33.0) {
+    } else if (!isDangerous) {
       _lastAlertedIssues[species] = "";
     }
-  }
-
-  Map<String, dynamic> calculateRisk(String species, double temp, double ph, double turbidity) {
-    double score = 0;
-    List<String> issues = [];
-    
-    if (species == "Tilapia" || species == "Both") {
-      if (temp < 24) { score += 33.3; issues.add("Low Temperature"); }
-      else if (temp > 30) { score += 33.3; issues.add("High Temperature"); }
-      
-      if (ph < 6.5) { score += 33.3; issues.add("Low pH"); }
-      else if (ph > 9.0) { score += 33.3; issues.add("High pH"); }
-      
-      if (turbidity > 25) { score += 33.3; issues.add("High Turbidity"); }
-    } else if (species == "Asian Seabass" || species == "Seabass") {
-      if (temp < 26) { score += 33.3; issues.add("Low Temperature"); }
-      else if (temp > 32) { score += 33.3; issues.add("High Temperature"); }
-      
-      if (ph < 7.0) { score += 33.3; issues.add("Low pH"); }
-      else if (ph > 8.5) { score += 33.3; issues.add("High pH"); }
-      
-      if (turbidity > 20) { score += 33.3; issues.add("High Turbidity"); }
-    }
-
-    String category = score >= 33.0 ? "High Risk" : "Safe";
-
-    return {
-      "percentage": score,
-      "category": category,
-      "issues": issues
-    };
   }
 
 
@@ -121,8 +87,8 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
           ),
           const SizedBox(height: 24),
           Expanded(
-            child: StreamBuilder<DatabaseEvent>(
-              stream: _getDbRef().onValue,
+            child: StreamBuilder<DocumentSnapshot>(
+              stream: FirebaseFirestore.instance.collection('water_parameters').doc('2pBQE1SbutGXrRT6NjjA').snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: Padding(
@@ -135,13 +101,12 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
                   return Center(child: Text("Error: ${snapshot.error}"));
                 }
 
-                if (!snapshot.hasData ||
-                    snapshot.data!.snapshot.value == null) {
+                if (!snapshot.hasData || !snapshot.data!.exists) {
                   return const Center(child: Text("No sensor data found"));
                 }
 
-                final Map<dynamic, dynamic> values =
-                    snapshot.data!.snapshot.value as Map<dynamic, dynamic>;
+                final Map<String, dynamic> values =
+                    snapshot.data!.data() as Map<String, dynamic>;
 
                 final sensorData = {
                   "turbidity": double.tryParse(values['turbidity']?.toString() ?? '0') ?? 0.0,
@@ -149,17 +114,19 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
                   "ph": double.tryParse((values['pH'] ?? values['ph'])?.toString() ?? '0') ?? 0.0,
                 };
 
-                return Column(
-                  children: [
-                    _buildSensorCard(sensorData),
-                    const SizedBox(height: 24),
-                    _buildRecommendationSection(sensorData['temperature'] as double),
-                  ],
+                return SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      _buildSensorCard(sensorData),
+                      const SizedBox(height: 24),
+                      _buildRecommendationSection(sensorData['temperature'] as double),
+                    ],
+                  ),
                 );
               },
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -361,8 +328,10 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
           child: Column(
             children: [
   
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
+              Wrap(
+                alignment: WrapAlignment.spaceEvenly,
+                spacing: 12,
+                runSpacing: 16,
                 children: [
                   SpeedometerGauge(
                     title: 'Turbidity',
@@ -412,66 +381,94 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
       double phVal,
       double turbidityVal) {
 
-    final riskData =
-        calculateRisk(species, tempVal, phVal, turbidityVal);
-
-    final double risk = riskData["percentage"];
-    final String category = riskData["category"];
-    final List<String> issues = riskData["issues"] ?? [];
-
-    _checkAndAlert(risk, context, species, issues);
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.blueGrey.shade50,
-        borderRadius: BorderRadius.circular(8),
+    return FutureBuilder<String>(
+      future: MlPredictionService.getPrediction(
+        species: species == "Asian Seabass" ? "Seabass" : species,
+        temperature: tempVal,
+        ph: phVal,
+        turbidity: turbidityVal,
+        dissolvedOxygen: 6.0, // Default safe DO since IoT doesn't track it
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+      builder: (context, snapshot) {
+        bool isWaiting = snapshot.connectionState == ConnectionState.waiting;
+        String status = "AI Analyzing...";
+        Color statusColor = Colors.grey;
+        bool isDangerous = false;
 
-          Column(
+        if (snapshot.hasError) {
+          status = "ML Server Offline";
+          statusColor = Colors.orange;
+        } else if (snapshot.hasData) {
+          status = snapshot.data!;
+          if (status.toLowerCase().contains("healthy") || status.toLowerCase().contains("safe") || status.trim().isEmpty) {
+            status = "Healthy";
+            statusColor = Colors.green;
+          } else {
+            statusColor = Colors.red;
+            isDangerous = true;
+          }
+        }
+
+        // Trigger alert only when not waiting
+        if (!isWaiting && snapshot.hasData) {
+          _checkAndAlert(isDangerous, context, species, status);
+        }
+
+        return Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.blueGrey.shade50,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Text(
-                      'Species: $species ${species == "Tilapia" ? "(Aeromoniasis Risk)" : "(Bacterial Risk (Vibrio-type))"}', 
-                      style: const TextStyle(fontWeight: FontWeight.bold)
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Species: $species', 
+                          style: const TextStyle(fontWeight: FontWeight.bold)
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.info_outline, color: Colors.blue),
+                        tooltip: 'Show Safe Ranges',
+                        onPressed: () => _showSafeRangeInfo(context, species),
+                      ),
+                    ],
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.info_outline, color: Colors.blue),
-                    tooltip: 'Show Safe Ranges',
-                    onPressed: () => _showSafeRangeInfo(context, species),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      const Icon(Icons.psychology, size: 16, color: Colors.purple),
+                      const SizedBox(width: 8),
+                      const Text('ML Prediction: ', style: TextStyle(color: Colors.black87)),
+                      if (isWaiting)
+                        const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2))
+                      else
+                        Text(status, style: TextStyle(fontWeight: FontWeight.bold, color: statusColor)),
+                    ],
                   ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  const Icon(Icons.analytics, size: 16, color: Colors.blueGrey),
-                  const SizedBox(width: 8),
-                  const Text('Risk Index: ', style: TextStyle(color: Colors.black87)),
-                  Text('${risk.toStringAsFixed(0)}%', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                   const Icon(Icons.health_and_safety, size: 16, color: Colors.blueGrey),
-                   const SizedBox(width: 8),
-                   const Text('Status: ', style: TextStyle(color: Colors.black87)),
-                   Text(category, style: TextStyle(fontWeight: FontWeight.bold, color: risk > 33.34 ? Colors.red : Colors.green)),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                       const Icon(Icons.health_and_safety, size: 16, color: Colors.blueGrey),
+                       const SizedBox(width: 8),
+                       const Text('Status: ', style: TextStyle(color: Colors.black87)),
+                       Text(isDangerous ? "High Risk" : (isWaiting ? "Computing" : "Safe"), style: TextStyle(fontWeight: FontWeight.bold, color: isDangerous ? Colors.red : (isWaiting ? Colors.grey : Colors.green))),
+                    ],
+                  ),
                 ],
               ),
             ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -569,8 +566,8 @@ class SpeedometerGauge extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         SizedBox(
-          width: 90,
-          height: 60,
+          width: 76,
+          height: 50,
           child: CustomPaint(
             painter: _SpeedometerPainter(
               value: value,
@@ -584,11 +581,11 @@ class SpeedometerGauge extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           '${value.toStringAsFixed(1)}$unit',
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
         ),
         Text(
           title,
-          style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+          style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
         ),
       ],
     );
@@ -623,14 +620,14 @@ class _SpeedometerPainter extends CustomPainter {
         colors: gradientColors,
         stops: gradientStops,
       ).createShader(rect)
-      ..strokeWidth = 12
+      ..strokeWidth = 10
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
     // Background track (so we see the full semi-circle clearly)
     Paint bgTrackPaint = Paint()
       ..color = Colors.grey.shade200
-      ..strokeWidth = 12
+      ..strokeWidth = 10
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
     canvas.drawArc(rect, math.pi, math.pi, false, bgTrackPaint);
