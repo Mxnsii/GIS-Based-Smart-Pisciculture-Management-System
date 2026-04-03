@@ -17,6 +17,7 @@ class IotMonitoringScreen extends StatefulWidget {
 }
 
 class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
+
   Map<String, String> _lastAlertedIssues = {"Tilapia": "", "Asian Seabass": ""};
 
   void _checkAndAlert(bool isDangerous, BuildContext context, String species, String disease) {
@@ -77,15 +78,17 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
   Widget build(BuildContext context) {
     return Container(
       color: const Color(0xFFF8FAFC),
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          const WeatherWidget(),
+          const SizedBox(height: 24),
           const Text(
             'IoT Real-time Monitoring',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
           Expanded(
             child: StreamBuilder<DocumentSnapshot>(
               stream: FirebaseFirestore.instance.collection('water_parameters').doc('2pBQE1SbutGXrRT6NjjA').snapshots(),
