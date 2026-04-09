@@ -8,6 +8,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../widgets/weather_widget.dart';
 import '../widgets/custom_back_button.dart';
 import 'authority_complaints_screen.dart'; // Implemented Authority Complaints Tab
+import 'chatbot_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final String userName;
@@ -87,6 +88,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
             )),
       ),
       body: _pages[_selectedIndex],
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const ChatbotScreen(),
+            ),
+          );
+        },
+        backgroundColor: Colors.blueAccent,
+        icon: const Icon(Icons.support_agent, color: Colors.white),
+        label: const Text('GIS Agent', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+      ),
       bottomNavigationBar: BottomNavigationBar(
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(
