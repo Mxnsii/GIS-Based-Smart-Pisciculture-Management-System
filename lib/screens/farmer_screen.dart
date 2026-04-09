@@ -5,6 +5,7 @@ import 'hatcheries_screen.dart';
 import 'login_screen.dart';
 import 'govt_schemes_screen.dart';
 import 'complaint_registry_screen.dart'; // Import for illegal fishing reporting
+import 'fish_directory_screen.dart'; // Import for fish directory
 
 class FarmerScreen extends StatefulWidget {
   final String farmerName;
@@ -20,6 +21,7 @@ class _FarmerScreenState extends State<FarmerScreen> {
 
   final List<Widget> _pages = const [
     IotMonitoringScreen(),
+    FishDirectoryScreen(), // Index 1
     AlertsScreen(),
     HatcheriesScreen(),
     GovtSchemesScreen(),
@@ -76,12 +78,16 @@ class _FarmerScreenState extends State<FarmerScreen> {
               height: 1.0,
             )),
       ),
-      body: _selectedIndex == 4 ? _complaintTab : _pages[_selectedIndex],
+      body: _selectedIndex == 5 ? _complaintTab : _pages[_selectedIndex],
       bottomNavigationBar: BottomNavigationBar(
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(
             icon: Icon(Icons.sensors),
             label: 'IoT Monitoring',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.menu_book),
+            label: 'Market Analysis',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.notifications_active),

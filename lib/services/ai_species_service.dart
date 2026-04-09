@@ -14,7 +14,7 @@ class AISpeciesService {
   }) async {
     try {
       final model = GenerativeModel(
-        model: 'gemini-1.5-flash-latest',
+        model: 'gemini-1.5-flash',
         apiKey: _apiKey,
       );
 

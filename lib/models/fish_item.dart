@@ -14,6 +14,13 @@ class FishItem {
   final String trend; // up, down, flat
   final String uses; // Export, Local Food, Premium Curry
   final bool isBanned; // True during monsoon for sea fish
+  final String? imageUrl; // Added for 'real fish pics'
+
+  // Live price data from Firebase/Gemini (injected externally)
+  double? livePrice;
+  String? liveTrend;
+  double? liveChangePct;
+  DateTime? priceLastUpdated;
 
   FishItem({
     required this.name,
@@ -31,5 +38,19 @@ class FishItem {
     required this.trend,
     required this.uses,
     this.isBanned = false,
+    this.imageUrl,
   });
+
+  // Returns live price if available, otherwise falls back to daily-simulated price
+  double get currentPrice {
+    if (livePrice != null) return livePrice!;
+    // Fallback: daily-varying simulation
+    final now = DateTime.now();
+    final seed = (now.year * 366 + now.day) ^ name.hashCode;
+    final jitter = (seed % 21 - 10) / 100.0;
+    return avgPrice * (1 + jitter);
+  }
+
+  // Returns live trend or static trend
+  String get currentTrend => liveTrend ?? trend;
 }

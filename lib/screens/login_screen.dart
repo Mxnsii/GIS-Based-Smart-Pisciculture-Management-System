@@ -4,6 +4,7 @@ import '../widgets/custom_text_field.dart';
 import 'dashboard_screen.dart';
 import '../services/auth_service.dart';
 import 'package:aqua_app/screens/farmer_screen.dart';
+import 'package:aqua_app/screens/farmer_screen.dart';
 
 
 class LoginScreen extends StatefulWidget {

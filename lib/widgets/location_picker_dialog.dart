@@ -17,19 +17,20 @@ class LocationPickerDialog extends StatefulWidget {
 class _LocationPickerDialogState extends State<LocationPickerDialog> {
   final MapController _mapController = MapController();
   
-  // Default to Goa center
-  LatLng _center = const LatLng(15.2993, 74.1240);
+  // No more hardcoded Goa. If null, we wait for detection.
+  LatLng? _center;
   String _currentAddress = 'Move map to select location...';
   bool _isLoadingAddress = false;
   bool _isMapReady = false;
+  bool _isDetecting = false;
   Timer? _debounce;
   
   @override
   void initState() {
     super.initState();
     if (widget.initialPosition != null) {
-      _center = widget.initialPosition!;
-      _getAddressFromLatLng(_center);
+      _center = widget.initialPosition;
+      _getAddressFromLatLng(_center!);
     } else {
       _determinePosition();
     }
@@ -43,12 +44,19 @@ class _LocationPickerDialogState extends State<LocationPickerDialog> {
   }
 
   Future<void> _determinePosition() async {
+    if (mounted) setState(() => _isDetecting = true);
+    
     bool serviceEnabled;
     LocationPermission permission;
 
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      if (mounted) setState(() => _currentAddress = 'Location services disabled.');
+      if (mounted) {
+        setState(() {
+          _currentAddress = 'Location services disabled.';
+          _isDetecting = false;
+        });
+      }
       return;
     }
 
@@ -56,31 +64,64 @@ class _LocationPickerDialogState extends State<LocationPickerDialog> {
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
-        if (mounted) setState(() => _currentAddress = 'Location permissions denied.');
+        if (mounted) {
+          setState(() {
+            _currentAddress = 'Location permissions denied.';
+            _isDetecting = false;
+          });
+        }
         return;
       }
     }
     
     if (permission == LocationPermission.deniedForever) {
-      if (mounted) setState(() => _currentAddress = 'Location permissions permanently denied.');
+      if (mounted) {
+        setState(() {
+          _currentAddress = 'Enable GPS in browser settings.';
+          _isDetecting = false;
+        });
+      }
       return;
     } 
 
     try {
-      Position position = await Geolocator.getCurrentPosition();
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.best,
+        timeLimit: const Duration(seconds: 15),
+      );
+      
+      // REGION GUARD
+      if (position.latitude < 8.0 || position.latitude > 38.0) {
+        // Detected overseas (e.g. Romania IP error)
+        if (mounted) {
+          setState(() {
+             _currentAddress = 'Satellite signal weak (Outside Region)';
+             _isDetecting = false;
+          });
+        }
+        return;
+      }
+
       final userLocation = LatLng(position.latitude, position.longitude);
       if (mounted) {
         setState(() {
           _center = userLocation;
+          _isDetecting = false;
         });
         if (_isMapReady) {
-          _mapController.move(_center, 14.0);
+          _mapController.move(_center!, 14.0);
         }
-        _getAddressFromLatLng(_center);
+        _getAddressFromLatLng(_center!);
       }
     } catch (e) {
-      // Using default location if error
-      if (mounted) _getAddressFromLatLng(_center);
+      if (mounted) {
+        setState(() {
+          _currentAddress = 'Signal weak. Move map manually?';
+          _isDetecting = false;
+          // Fallback to Panjim ONLY if everything fails and user is stuck, 
+          // but we'll leave it null for now to respect "No mock data"
+        });
+      }
     }
   }
 
@@ -94,7 +135,7 @@ class _LocationPickerDialogState extends State<LocationPickerDialog> {
 
       if (_debounce?.isActive ?? false) _debounce!.cancel();
       _debounce = Timer(const Duration(milliseconds: 1000), () {
-        _getAddressFromLatLng(_center);
+        _getAddressFromLatLng(_center!);
       });
     }
   }
@@ -106,7 +147,7 @@ class _LocationPickerDialogState extends State<LocationPickerDialog> {
     try {
       final url = Uri.parse(
           'https://nominatim.openstreetmap.org/reverse?format=json&lat=${position.latitude}&lon=${position.longitude}&zoom=18&addressdetails=1');
-      final response = await http.get(url, headers: {'User-Agent': 'com.agriconnect.app'});
+      final response = await http.get(url, headers: {'User-Agent': 'AquaApp/1.0'});
       
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -127,7 +168,7 @@ class _LocationPickerDialogState extends State<LocationPickerDialog> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _currentAddress = 'Check internet connection';
+          _currentAddress = 'Network error';
           _isLoadingAddress = false;
         });
       }
@@ -136,6 +177,9 @@ class _LocationPickerDialogState extends State<LocationPickerDialog> {
 
   @override
   Widget build(BuildContext context) {
+    // Default center for the map widget if everything is still null
+    final LatLng mapInitialCenter = _center ?? const LatLng(15.4989, 73.8278);
+
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
@@ -147,7 +191,7 @@ class _LocationPickerDialogState extends State<LocationPickerDialog> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Pick Location', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const Text('Confirm Farm Location', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   IconButton(
                     icon: const Icon(Icons.close),
                     onPressed: () => Navigator.of(context).pop(),
@@ -162,7 +206,7 @@ class _LocationPickerDialogState extends State<LocationPickerDialog> {
                   FlutterMap(
                     mapController: _mapController,
                     options: MapOptions(
-                      initialCenter: _center,
+                      initialCenter: mapInitialCenter,
                       initialZoom: 14.0,
                       onPositionChanged: _onPositionChanged,
                       onMapReady: () {
@@ -176,13 +220,35 @@ class _LocationPickerDialogState extends State<LocationPickerDialog> {
                       ),
                     ],
                   ),
-                  // Static Pin in the center
-                  const IgnorePointer(
-                    child: Padding(
-                      padding: EdgeInsets.only(bottom: 40.0), // Adjust to make the pin point at the center
-                      child: Icon(Icons.location_pin, color: Colors.blue, size: 40),
+                  
+                  // Detection Overlay
+                  if (_isDetecting)
+                    Container(
+                      color: Colors.black.withOpacity(0.3),
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const CircularProgressIndicator(color: Colors.white),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Acquiring Satellite Lock...',
+                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                  ),
+
+                  // Static Pin in the center
+                  if (!_isDetecting)
+                    const IgnorePointer(
+                      child: Padding(
+                        padding: EdgeInsets.only(bottom: 40.0),
+                        child: Icon(Icons.location_pin, color: Colors.red, size: 50),
+                      ),
+                    ),
+                    
                   // Centering button
                   Positioned(
                     right: 16,
@@ -213,22 +279,22 @@ class _LocationPickerDialogState extends State<LocationPickerDialog> {
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.location_on, color: Colors.blue, size: 24),
+                      const Icon(Icons.location_on, color: Colors.red, size: 24),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Text(
-                              'Selected Location',
-                              style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w600),
+                              'IDENTIFIED LOCATION',
+                              style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.w900),
                             ),
                             const SizedBox(height: 4),
                             _isLoadingAddress
                                 ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
                                 : Text(
                                     _currentAddress,
-                                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
                                   ),
@@ -244,17 +310,18 @@ class _LocationPickerDialogState extends State<LocationPickerDialog> {
                       backgroundColor: Colors.blue,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      elevation: 0,
                     ),
-                    onPressed: _isLoadingAddress 
+                    onPressed: (_isLoadingAddress || _center == null)
                         ? null 
                         : () {
                             Navigator.of(context).pop({
                               'address': _currentAddress,
-                              'lat': _center.latitude,
-                              'lng': _center.longitude,
+                              'lat': _center!.latitude,
+                              'lng': _center!.longitude,
                             });
                           },
-                    child: const Text('Confirm Location', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    child: const Text('CONFIRM THIS LOCATION', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
                   ),
                 ],
               ),

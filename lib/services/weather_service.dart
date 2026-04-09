@@ -29,7 +29,14 @@ class WeatherService {
         if (geoResponse.statusCode == 200) {
           final geoData = json.decode(geoResponse.body);
           final address = geoData['address'];
-          locationName = address['city'] ?? address['town'] ?? address['village'] ?? address['suburb'] ?? 'Coastal Zone';
+          String primaryLocation = address['city'] ?? address['town'] ?? address['county'] ?? address['state'] ?? 'Coastal Zone';
+          String state = address['state'] ?? '';
+          
+          if (state.isNotEmpty && !primaryLocation.contains(state)) {
+            locationName = '$primaryLocation, $state';
+          } else {
+            locationName = primaryLocation;
+          }
         }
       } catch (e) {
         locationName = 'GPS Zone';
@@ -60,11 +67,6 @@ class WeatherService {
     } catch (e) {
       throw Exception('Failed to fetch weather: $e');
     }
-  }
-
-  // Legacy support for backward compatibility
-  Future<Map<String, dynamic>> fetchWeather(String city) async {
-    return fetchWeatherData(lat: 15.4909, lng: 73.8278);
   }
 
   String _mapWmoCodeToCondition(int code) {
