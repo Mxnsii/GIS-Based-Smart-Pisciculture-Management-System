@@ -13,16 +13,15 @@ class IotMonitoringScreen extends StatefulWidget {
 }
 
 class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
-
   Map<String, String> _lastAlertedIssues = {"Tilapia": "", "Asian Seabass": ""};
 
-  void _checkAndAlert(bool isDangerous, BuildContext context, String species, String disease) {
-    if (isDangerous && _lastAlertedIssues[species] != disease) {
+  void _checkAndAlert(int riskLevel, BuildContext context, String species, String disease) {
+    if (riskLevel > 0 && _lastAlertedIssues[species] != disease) {
       _lastAlertedIssues[species] = disease;
 
       NotificationService.showNotification(
         id: species.hashCode,
-        title: '⚠️ AI Alert: $species',
+        title: riskLevel == 2 ? '⚠️ High AI Alert: $species' : '⚠️ AI Warning: $species',
         body: 'Disease Predicted: $disease',
       );
 
@@ -33,25 +32,25 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
             return AlertDialog(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               title: Row(
-                children: const [
-                  Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
-                  SizedBox(width: 8),
+                children: [
+                  Icon(Icons.warning_amber_rounded, color: riskLevel == 2 ? Colors.red : Colors.orange, size: 28),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'AI RISK PREDICTION',
-                      style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
+                      riskLevel == 2 ? 'HIGH RISK DETECTED' : 'MEDIUM RISK WARNING',
+                      style: TextStyle(color: riskLevel == 2 ? Colors.red : Colors.orange, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ],
               ),
               content: Text(
-                'The ML model has predicted a high risk of disease for $species based on current water parameters:\n\n• Predicted: $disease\n\nPlease check the water conditions immediately.',
+                'The ML model has predicted a risk of disease for $species based on current water parameters:\n\n• Predicted: $disease\n\nPlease check the water conditions and log any visual symptoms.',
                 style: const TextStyle(fontSize: 16),
               ),
               actions: [
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.orange,
+                      backgroundColor: riskLevel == 2 ? Colors.red : Colors.orange,
                       foregroundColor: Colors.white),
                   onPressed: () {
                     Navigator.of(context).pop();
@@ -63,7 +62,7 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
           },
         );
       });
-    } else if (!isDangerous) {
+    } else if (riskLevel == 0) {
       _lastAlertedIssues[species] = "";
     }
   }
@@ -208,25 +207,31 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
         bool isWaiting = snapshot.connectionState == ConnectionState.waiting;
         String status = "AI Analyzing...";
         Color statusColor = Colors.grey;
-        bool isDangerous = false;
+        int riskLevel = 0;
 
         if (snapshot.hasError) {
           status = "ML Server Offline";
           statusColor = Colors.orange;
         } else if (snapshot.hasData) {
           status = snapshot.data!;
-          if (status.toLowerCase().contains("healthy") || status.toLowerCase().contains("safe") || status.trim().isEmpty) {
+          String lowerStatus = status.toLowerCase();
+          
+          if (lowerStatus.contains("healthy") || lowerStatus.contains("safe") || status.trim().isEmpty) {
             status = "Healthy";
             statusColor = Colors.green;
+            riskLevel = 0;
+          } else if (lowerStatus.contains("mild")) {
+            statusColor = Colors.orange;
+            riskLevel = 1;
           } else {
             statusColor = Colors.red;
-            isDangerous = true;
+            riskLevel = 2;
           }
         }
 
         // Trigger alert only when not waiting
         if (!isWaiting && snapshot.hasData) {
-          _checkAndAlert(isDangerous, context, species, status);
+          _checkAndAlert(riskLevel, context, species, status);
         }
 
         return Container(
@@ -275,7 +280,13 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
                        const Icon(Icons.health_and_safety, size: 16, color: Colors.blueGrey),
                        const SizedBox(width: 8),
                        const Text('Status: ', style: TextStyle(color: Colors.black87)),
-                       Text(isDangerous ? "High Risk" : (isWaiting ? "Computing" : "Safe"), style: TextStyle(fontWeight: FontWeight.bold, color: isDangerous ? Colors.red : (isWaiting ? Colors.grey : Colors.green))),
+                       Text(
+                         riskLevel == 2 ? "High Risk" : (riskLevel == 1 ? "Medium Risk" : (isWaiting ? "Computing" : "Safe")), 
+                         style: TextStyle(
+                           fontWeight: FontWeight.bold, 
+                           color: riskLevel == 2 ? Colors.red : (riskLevel == 1 ? Colors.orange : (isWaiting ? Colors.grey : Colors.green))
+                         )
+                       ),
                     ],
                   ),
                 ],
