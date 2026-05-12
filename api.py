@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import pickle
+import joblib
 import numpy as np
 
 app = Flask(__name__)
@@ -13,9 +14,9 @@ le_label = pickle.load(open("label_encoder.pkl", "rb"))
 
 # Load species recommendation models and encoders
 try:
-    species_rec_model = pickle.load(open("species_prediction_model.pkl", "rb"))
-    species_rec_label_encoder = pickle.load(open("species_label_encoder.pkl", "rb"))
-    water_type_encoder = pickle.load(open("water_type_encoder.pkl", "rb"))
+    species_rec_model = joblib.load("species_prediction_model.pkl")
+    species_rec_label_encoder = joblib.load("species_label_encoder.pkl")
+    water_type_encoder = joblib.load("water_type_encoder.pkl")
 except Exception as e:
     print(f"Warning: Species recommendation models not found. {e}")
 
