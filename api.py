@@ -87,8 +87,6 @@ def predict_species():
         results = []
         for species, prob in species_probabilities:
             score = prob * 100
-            if score < 20:
-                continue # ignore very low scores
                 
             if score >= 85:
                 status = "Highly Suitable"
