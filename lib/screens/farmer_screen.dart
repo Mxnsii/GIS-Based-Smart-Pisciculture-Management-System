@@ -6,6 +6,7 @@ import 'login_screen.dart';
 import 'govt_schemes_screen.dart';
 import 'complaint_registry_screen.dart'; // Import for illegal fishing reporting
 import 'fish_directory_screen.dart'; // Import for fish directory
+import 'species_recommendation_screen.dart';
 
 class FarmerScreen extends StatefulWidget {
   final String farmerName;
@@ -22,9 +23,10 @@ class _FarmerScreenState extends State<FarmerScreen> {
   final List<Widget> _pages = const [
     IotMonitoringScreen(),
     FishDirectoryScreen(), // Index 1
-    AlertsScreen(),
-    HatcheriesScreen(),
-    GovtSchemesScreen(),
+    AlertsScreen(), // Index 2
+    SpeciesRecommendationScreen(), // Index 3
+    HatcheriesScreen(), // Index 4
+    GovtSchemesScreen(), // Index 5
   ];
 
   late final Widget _complaintTab;
@@ -78,7 +80,7 @@ class _FarmerScreenState extends State<FarmerScreen> {
               height: 1.0,
             )),
       ),
-      body: _selectedIndex == 5 ? _complaintTab : _pages[_selectedIndex],
+      body: _selectedIndex == 6 ? _complaintTab : _pages[_selectedIndex],
       bottomNavigationBar: BottomNavigationBar(
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(
@@ -94,6 +96,10 @@ class _FarmerScreenState extends State<FarmerScreen> {
             label: 'Alerts',
           ),
           BottomNavigationBarItem(
+            icon: Icon(Icons.analytics),
+            label: 'AI Species',
+          ),
+          BottomNavigationBarItem(
             icon: Icon(Icons.water_drop),
             label: 'Hatcheries',
           ),
@@ -107,11 +113,11 @@ class _FarmerScreenState extends State<FarmerScreen> {
           ),
         ],
         currentIndex: _selectedIndex,
+        onTap: _onItemTapped,
+        type: BottomNavigationBarType.shifting,
+        backgroundColor: Colors.white,
         selectedItemColor: Colors.blue,
         unselectedItemColor: Colors.grey,
-        onTap: _onItemTapped,
-        type: BottomNavigationBarType.fixed,
-        backgroundColor: Colors.white,
         elevation: 8,
       ),
     );
