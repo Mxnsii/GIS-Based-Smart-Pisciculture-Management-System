@@ -4,6 +4,7 @@ import '../widgets/custom_text_field.dart';
 import 'dashboard_screen.dart';
 import '../services/auth_service.dart';
 import 'package:aqua_app/screens/farmer_screen.dart';
+import 'chatbot_screen.dart';
 
 
 class LoginScreen extends StatefulWidget {
@@ -165,6 +166,22 @@ if (_isAuthority) {
                     ),
                   ),
                   const SizedBox(height: 24),
+
+                  if (!_isAuthority)
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const ChatbotScreen(),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.support_agent),
+                      label: const Text('Open GIS Agent'),
+                    ),
+
+                  if (!_isAuthority) const SizedBox(height: 16),
 
                   // Form Fields
                   if (!_isLogin) 
