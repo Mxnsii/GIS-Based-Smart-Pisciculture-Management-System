@@ -6,6 +6,8 @@ import 'login_screen.dart';
 import 'govt_schemes_screen.dart';
 import 'complaint_registry_screen.dart'; // Import for illegal fishing reporting
 import 'chatbot_screen.dart';
+import 'fish_directory_screen.dart'; // Import for fish directory
+import 'species_recommendation_screen.dart';
 
 class FarmerScreen extends StatefulWidget {
   final String farmerName;
@@ -21,9 +23,11 @@ class _FarmerScreenState extends State<FarmerScreen> {
 
   final List<Widget> _pages = const [
     IotMonitoringScreen(),
-    AlertsScreen(),
-    HatcheriesScreen(),
-    GovtSchemesScreen(),
+    FishDirectoryScreen(), // Index 1
+    AlertsScreen(), // Index 2
+    SpeciesRecommendationScreen(), // Index 3
+    HatcheriesScreen(), // Index 4
+    GovtSchemesScreen(), // Index 5
   ];
 
   late final Widget _complaintTab;
@@ -89,7 +93,7 @@ class _FarmerScreenState extends State<FarmerScreen> {
               height: 1.0,
             )),
       ),
-      body: _selectedIndex == 4 ? _complaintTab : _pages[_selectedIndex],
+      body: _selectedIndex == 6 ? _complaintTab : _pages[_selectedIndex],
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
           Navigator.push(
@@ -113,8 +117,16 @@ class _FarmerScreenState extends State<FarmerScreen> {
             label: 'IoT Monitoring',
           ),
           BottomNavigationBarItem(
+            icon: Icon(Icons.menu_book),
+            label: 'Market Analysis',
+          ),
+          BottomNavigationBarItem(
             icon: Icon(Icons.notifications_active),
             label: 'Alerts',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.analytics),
+            label: 'AI Species',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.water_drop),
@@ -130,11 +142,11 @@ class _FarmerScreenState extends State<FarmerScreen> {
           ),
         ],
         currentIndex: _selectedIndex,
+        onTap: _onItemTapped,
+        type: BottomNavigationBarType.shifting,
+        backgroundColor: Colors.white,
         selectedItemColor: Colors.blue,
         unselectedItemColor: Colors.grey,
-        onTap: _onItemTapped,
-        type: BottomNavigationBarType.fixed,
-        backgroundColor: Colors.white,
         elevation: 8,
       ),
     );

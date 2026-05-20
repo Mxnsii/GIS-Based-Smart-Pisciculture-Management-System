@@ -2,7 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:geolocator/geolocator.dart';
 import 'dart:ui';
+import 'dart:convert';
+import 'dart:async';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/weather_service.dart';
+import 'location_picker_dialog.dart';
+import 'package:latlong2/latlong.dart';
 
 class WeatherWidget extends StatefulWidget {
   const WeatherWidget({super.key});
@@ -12,104 +18,217 @@ class WeatherWidget extends StatefulWidget {
 }
 
 class _WeatherWidgetState extends State<WeatherWidget> with SingleTickerProviderStateMixin {
-  late Future<Map<String, dynamic>> _weatherFuture;
+  Map<String, dynamic>? _weatherData;
+  bool _isSensing = true;
+  String _sensingMessage = "Sensing Location...";
   final WeatherService _weatherService = WeatherService();
   late AnimationController _pulseController;
+  StreamSubscription<Position>? _positionStream;
+
+  static const String _cacheKey = 'cached_weather_data';
 
   @override
   void initState() {
     super.initState();
-    _weatherFuture = _initWeather();
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat(reverse: true);
+    
+    _initRealTimeSensing();
   }
 
   @override
   void dispose() {
     _pulseController.dispose();
+    _positionStream?.cancel();
     super.dispose();
   }
 
-  Future<Map<String, dynamic>> _initWeather() async {
+  Future<void> _initRealTimeSensing() async {
+    // 1. Instant Load from Cache
+    await _loadFromCache();
+
+    // 2. Clear previous location to force a fresh sense if cache is old
+    if (mounted) setState(() => _isSensing = true);
+
     try {
-      // Direct Sensing Attempt
-      Position position = await _determinePosition();
-      return _weatherService.fetchWeatherData(
-        lat: position.latitude, 
-        lng: position.longitude,
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        setState(() {
+          _sensingMessage = "Please Enable GPS";
+          _isSensing = false;
+        });
+        return;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          setState(() {
+            _sensingMessage = "GPS Permission Denied";
+            _isSensing = false;
+          });
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        setState(() {
+          _sensingMessage = "Enable GPS in Settings";
+          _isSensing = false;
+        });
+        return;
+      }
+
+      // Listen for accuracy improvements (Real-Time Auto Fetch)
+      const LocationSettings locationSettings = LocationSettings(
+        accuracy: LocationAccuracy.best,
+        distanceFilter: 500, 
       );
+
+      _positionStream = Geolocator.getPositionStream(locationSettings: locationSettings).listen(
+        (Position position) {
+          _handleNewPosition(position);
+        },
+        onError: (e) {
+          debugPrint("Location Stream Error: $e");
+        }
+      );
+
+      // Trigger an immediate high-accuracy fetch
+      Position initialPosition = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.best,
+        timeLimit: const Duration(seconds: 15),
+      );
+      _handleNewPosition(initialPosition);
+
     } catch (e) {
-      // Explicitly mark as sensing failure but fetch Panjim as a secondary background fallback
-      final fallback = await _weatherService.fetchWeatherData(lat: 15.4909, lng: 73.8278);
-      return {
-        ...fallback,
-        'location': 'ENABLE GPS FOR LIVE UPDATES',
-        'isGPSDenied': true,
-      };
+      debugPrint("Sensing Init Error: $e");
+      if (_weatherData == null) {
+        setState(() {
+          _sensingMessage = "Waiting for Satellite...";
+          _isSensing = false;
+        });
+      }
     }
   }
 
-  Future<Position> _determinePosition() async {
-    bool serviceEnabled;
-    LocationPermission permission;
+  bool _isWithinIndia(Position position) {
+    // Guard against Romania (45, 25) or IP-based offshore errors
+    return position.latitude >= 8.0 && position.latitude <= 38.0 && 
+           position.longitude >= 68.0 && position.longitude <= 98.0;
+  }
 
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) return Future.error('Location services disabled.');
-
-    permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) return Future.error('Permission denied.');
+  Future<void> _handleNewPosition(Position position) async {
+    // ACCURACY GUARD
+    if (kIsWeb && position.accuracy > 5000) {
+      debugPrint("Ignoring low accuracy IP-location (${position.accuracy}m)");
+      return;
     }
-    
-    if (permission == LocationPermission.deniedForever) return Future.error('Permissions permanently denied.');
 
-    return await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+    if (!_isWithinIndia(position)) {
+      debugPrint("Ignoring offshore location (${position.latitude}, ${position.longitude})");
+      if (mounted) {
+        setState(() {
+          _sensingMessage = "Signal Weak (Checking Region)";
+        });
+      }
+      return; 
+    }
+
+    // Refresh weather if moved > 500m
+    if (_weatherData != null) {
+      double distance = Geolocator.distanceBetween(
+        _weatherData!['lat'], 
+        _weatherData!['lng'], 
+        position.latitude, 
+        position.longitude
+      );
+      if (distance < 500) return;
+    }
+
+    if (mounted) setState(() => _isSensing = true);
+    await _fetchAndUpdate(position.latitude, position.longitude);
+    if (mounted) setState(() => _isSensing = false);
+  }
+
+  Future<void> _loadFromCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String? cachedString = prefs.getString(_cacheKey);
+      if (cachedString != null) {
+        final Map<String, dynamic> cachedData = json.decode(cachedString);
+        if (mounted) {
+          setState(() {
+            _weatherData = cachedData;
+            _isSensing = false;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("Cache load failed: $e");
+    }
+  }
+
+  Future<void> _fetchAndUpdate(double lat, double lng) async {
+    try {
+      final data = await _weatherService.fetchWeatherData(lat: lat, lng: lng);
+      final finalData = {
+        ...data,
+        'lat': lat,
+        'lng': lng,
+      };
+
+      if (mounted) {
+        setState(() {
+          _weatherData = finalData;
+        });
+      }
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_cacheKey, json.encode(finalData));
+    } catch (e) {
+      debugPrint("Weather fetch failed: $e");
+    }
+  }
+
+  Future<void> _openManualLocationPicker() async {
+    final LatLng? currentLatLng = _weatherData != null 
+      ? LatLng(_weatherData!['lat'], _weatherData!['lng'])
+      : null;
+
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => LocationPickerDialog(initialPosition: currentLatLng),
+    );
+
+    if (result != null && mounted) {
+      if (mounted) setState(() => _isSensing = true);
+      await _fetchAndUpdate(result['lat'], result['lng']);
+      if (mounted) setState(() => _isSensing = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<Map<String, dynamic>>(
-      future: _weatherFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          // Show skeleton/placeholder instead of loading screen
-          return _buildPremiumWeatherCard({
-            'location': 'Sensing Location...',
-            'temp': 0,
-            'condition': 'Loading',
-            'humidity': 0,
-            'wind_speed': 0,
-            'wave_height': 0,
-            'isLoading': true,
-          });
-        } else if (snapshot.hasError) {
-          return _buildErrorView();
-        } else if (snapshot.hasData) {
-          final data = snapshot.data!;
-          return _buildPremiumWeatherCard(data);
-        }
-        return _buildErrorView();
-      },
-    );
-  }
+    if (_weatherData == null || (_isSensing && _weatherData!['location'] == "Sensing Location...")) {
+      return _buildPremiumWeatherCard({
+        'location': _sensingMessage,
+        'temp': 0,
+        'condition': 'Loading',
+        'humidity': 0,
+        'wind_speed': 0,
+        'wave_height': 0,
+        'isLoading': true,
+      });
+    }
 
-  Widget _buildErrorView() {
-    return _buildPremiumWeatherCard({
-      'location': "Panjim, Goa (Offline)",
-      'temp': 28,
-      'condition': "Sunny",
-      'humidity': 65,
-      'wind_speed': 12.5,
-      'wave_height': 0.8,
-      'isError': true,
-    });
+    return _buildPremiumWeatherCard(_weatherData!);
   }
 
   Widget _buildPremiumWeatherCard(Map<String, dynamic> data) {
-    final bool isError = data['isError'] ?? false;
     final bool isLoading = data['isLoading'] ?? false;
     final int temp = (data['temp'] as num).round();
     final int humidity = data['humidity'];
@@ -118,38 +237,7 @@ class _WeatherWidgetState extends State<WeatherWidget> with SingleTickerProvider
     final String condition = data['condition'];
     final String location = data['location'];
 
-    // Industry Risk Score Logic
-    final double riskScore = (windSpeed * 0.6) + (waveHeight * 20);
-    
-    Color riskColor;
-    String riskStatus;
-    String advisory;
-    IconData riskIcon;
-
-    if (isLoading) {
-      riskColor = Colors.white24;
-      riskStatus = 'ACQUIRING GPS...';
-      advisory = '🛰️ DIRECT SENSING ACTIVATED';
-      riskIcon = Icons.gps_fixed;
-    } else if (riskScore > 50) {
-      riskColor = Colors.redAccent;
-      riskStatus = 'DANGER';
-      advisory = '❌ AVOID FISHING - High Sea Risk';
-      riskIcon = Icons.gavel_rounded;
-    } else if (riskScore >= 25) {
-      riskColor = Colors.orangeAccent;
-      riskStatus = 'MODERATE';
-      advisory = '⚠️ PROCEED WITH CAUTION';
-      riskIcon = Icons.warning_rounded;
-    } else {
-      riskColor = Colors.greenAccent;
-      riskStatus = 'SAFE';
-      advisory = '✅ IDEAL FOR FISHING';
-      riskIcon = Icons.check_circle_rounded;
-    }
-
     return Container(
-      // Remove fixed height to fix overflow
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
@@ -160,12 +248,11 @@ class _WeatherWidgetState extends State<WeatherWidget> with SingleTickerProvider
         borderRadius: BorderRadius.circular(24),
         child: Stack(
           children: [
-            // Background Gradient
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: isError || isLoading 
+                  colors: isLoading 
                     ? [Colors.blue.shade900, Colors.blue.shade700]
                     : [Colors.blue.shade800, Colors.blue.shade400],
                   begin: Alignment.topLeft,
@@ -173,9 +260,8 @@ class _WeatherWidgetState extends State<WeatherWidget> with SingleTickerProvider
                 ),
               ),
               child: Column(
-                mainAxisSize: MainAxisSize.min, // Allow content to determine size
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  // TOP ROW: Location & Metrics
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -184,18 +270,32 @@ class _WeatherWidgetState extends State<WeatherWidget> with SingleTickerProvider
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              children: [
-                                Icon(isLoading ? Icons.gps_fixed : Icons.location_on, color: Colors.white, size: 20),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    location.toUpperCase(),
-                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18, letterSpacing: 0.5),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
+                            InkWell(
+                              onTap: _openManualLocationPicker,
+                              borderRadius: BorderRadius.circular(8),
+                              child: Padding(
+                                padding: const EdgeInsets.all(4.0),
+                                child: Row(
+                                  children: [
+                                    if (isLoading || _isSensing)
+                                      FadeTransition(
+                                        opacity: _pulseController,
+                                        child: const Icon(Icons.gps_fixed, color: Colors.white, size: 20),
+                                      )
+                                    else
+                                      const Icon(Icons.location_on, color: Colors.white, size: 20),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        location.toUpperCase(),
+                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18, letterSpacing: 0.5),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    const Icon(Icons.edit_location_alt, color: Colors.white70, size: 14),
+                                  ],
                                 ),
-                              ],
+                              ),
                             ),
                             const SizedBox(height: 4),
                             Text(
@@ -216,7 +316,7 @@ class _WeatherWidgetState extends State<WeatherWidget> with SingleTickerProvider
                                       style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.bold),
                                     ),
                                     Text(
-                                      isLoading ? 'SENSING...' : condition.toUpperCase(),
+                                      isLoading ? 'LOCATING...' : condition.toUpperCase(),
                                       style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 13, fontWeight: FontWeight.w800, letterSpacing: 1),
                                     ),
                                   ],
@@ -226,18 +326,13 @@ class _WeatherWidgetState extends State<WeatherWidget> with SingleTickerProvider
                           ],
                         ),
                       ),
-                      // Right Hand Stats
                       Column(
                         mainAxisAlignment: MainAxisAlignment.start,
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                            IconButton(
                              icon: const Icon(Icons.refresh, color: Colors.white, size: 20),
-                             onPressed: () {
-                               setState(() {
-                                 _weatherFuture = _initWeather();
-                               });
-                             },
+                             onPressed: _initRealTimeSensing,
                              tooltip: 'Re-sense Location',
                            ),
                            _buildMiniStat(Icons.water_drop, isLoading ? '--' : '$humidity%', 'HUMIDITY'),
@@ -247,52 +342,6 @@ class _WeatherWidgetState extends State<WeatherWidget> with SingleTickerProvider
                            _buildMiniStat(Icons.waves, isLoading ? '--' : '${waveHeight.toStringAsFixed(1)} m', 'WAVES'),
                         ],
                        ),
-                    ],
-                  ),
-                  
-                  const SizedBox(height: 20),
-                  
-                  // BOTTOM SECTION: Risk Score & Advisory
-                  Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'MARITIME RISK INDEX',
-                            style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1),
-                          ),
-                          Flexible(
-                            child: Text(
-                              advisory,
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
-                              textAlign: TextAlign.right,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Stack(
-                        children: [
-                          Container(
-                            height: 6,
-                            decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), borderRadius: BorderRadius.circular(3)),
-                          ),
-                          FractionallySizedBox(
-                            widthFactor: isLoading ? 0.3 : (riskScore / 100).clamp(0.0, 1.0),
-                            child: Container(
-                              height: 6,
-                              decoration: BoxDecoration(
-                                color: riskColor,
-                                borderRadius: BorderRadius.circular(3),
-                                boxShadow: [
-                                  if (!isLoading) BoxShadow(color: riskColor.withOpacity(0.5), blurRadius: 4, spreadRadius: 1)
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
                     ],
                   ),
                 ],

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'dart:typed_data';
 import 'package:geolocator/geolocator.dart';
+import 'package:intl/intl.dart';
 import '../models/fish_item.dart';
-import '../services/ai_species_service.dart';
 import '../services/weather_service.dart';
+import '../services/fish_price_service.dart';
 import 'fish_detail_screen.dart';
 
 class FishDirectoryScreen extends StatefulWidget {
@@ -13,12 +15,9 @@ class FishDirectoryScreen extends StatefulWidget {
 }
 
 class _FishDirectoryScreenState extends State<FishDirectoryScreen> {
-  final TextEditingController _searchController = TextEditingController();
   List<FishItem> _filteredFishes = [];
-  String _selectedType = 'All';
-  String _selectedWater = 'All';
-  List<Map<String, dynamic>> _aiRecommendations = [];
-  bool _isAILoading = true;
+  bool _pricesLoading = true;
+  DateTime? _pricesLastUpdated;
 
   final List<FishItem> _allFishes = [
     FishItem(
@@ -26,12 +25,13 @@ class _FishDirectoryScreenState extends State<FishDirectoryScreen> {
       konkani: "Paplet",
       marathi: "Pamplet",
       icon: "🐟",
+      imageUrl: "assets/images/pomfret.png",
       type: "Fish",
       water: "Sea",
       avgPrice: 850,
       season: "Winter",
       demand: 5,
-      description: "The most prized fish in Goa, known for its buttery texture.",
+      description: "The most prized fish in Goa, known for its buttery texture and delicate flavor.",
       location: "Goa Coastline",
       catchingTime: "04:00 AM - 07:00 AM",
       trend: "up",
@@ -42,12 +42,13 @@ class _FishDirectoryScreenState extends State<FishDirectoryScreen> {
       konkani: "Viswon",
       marathi: "Surmai",
       icon: "🐟",
+      imageUrl: "assets/images/kingfish.png",
       type: "Fish",
       water: "Sea",
       avgPrice: 750,
       season: "Year-round",
       demand: 5,
-      description: "A meaty fish widely used for the famous Goan fish fry.",
+      description: "A meaty, firm fish widely used for the famous Goan fish fry and recheado.",
       location: "Offshore Goa",
       catchingTime: "Pre-dawn",
       trend: "flat",
@@ -58,6 +59,7 @@ class _FishDirectoryScreenState extends State<FishDirectoryScreen> {
       konkani: "Bangda",
       marathi: "Bangda",
       icon: "🐟",
+      imageUrl: "assets/images/mackerel.png",
       type: "Fish",
       water: "Sea",
       avgPrice: 200,
@@ -67,393 +69,319 @@ class _FishDirectoryScreenState extends State<FishDirectoryScreen> {
       location: "Shallow Coastal Waters",
       catchingTime: "Early Morning",
       trend: "flat",
-      uses: "Grilled / Curry",
+      uses: "Grilled / Recheado Fry",
     ),
     FishItem(
       name: "Sardines",
       konkani: "Tarle",
-      marathi: "Pedve",
+      marathi: "Tarle",
       icon: "🐟",
+      imageUrl: "assets/images/sardine.png",
       type: "Fish",
       water: "Sea",
       avgPrice: 120,
-      season: "Monsoon",
+      season: "Monsoon / Post-Monsoon",
       demand: 4,
-      description: "Nutrient-rich small fish, highly affordable and consumed daily.",
-      location: "Nearshore",
-      catchingTime: "Daybreak",
-      trend: "up",
-      uses: "Daily Curry / Deep Fry",
+      description: "Small oily fish, extremely popular in Goa for its affordable price and rich taste.",
+      location: "Coastal Goa",
+      catchingTime: "Dawn",
+      trend: "flat",
+      uses: "Fried / Curry / Dried",
+    ),
+    FishItem(
+      name: "Tuna",
+      konkani: "Kupa",
+      marathi: "Kupa",
+      icon: "🐟",
+      imageUrl: "assets/images/tuna.png",
+      type: "Fish",
+      water: "Sea",
+      avgPrice: 500,
+      season: "Summer",
+      demand: 4,
+      description: "Powerful deep-sea fish, excellent for steaks and curry.",
+      location: "Deep Offshore Goa",
+      catchingTime: "Early Morning",
+      trend: "flat",
+      uses: "Fish Steaks / Export",
     ),
     FishItem(
       name: "Ladyfish",
       konkani: "Kane",
-      marathi: "Noglya",
+      marathi: "Kane",
       icon: "🐟",
+      imageUrl: "assets/images/ladyfish.png",
       type: "Fish",
-      water: "Brackish",
-      avgPrice: 450,
-      season: "Summer",
-      demand: 4,
-      description: "A slender, sweet-tasting fish known for its high nutritional value.",
-      location: "River Mouths",
-      catchingTime: "Evening",
+      water: "Sea",
+      avgPrice: 180,
+      season: "Year-round",
+      demand: 3,
+      description: "A slender, silvery fish popular in Goa for its use in sol kadhi accompaniments.",
+      location: "Coastal Waters",
+      catchingTime: "Morning",
       trend: "flat",
-      uses: "Fish Fry",
+      uses: "Rava Fry / Curry",
     ),
     FishItem(
       name: "Bombay Duck",
       konkani: "Bombil",
       marathi: "Bombil",
       icon: "🐟",
+      imageUrl: "assets/images/bombil.png",
       type: "Fish",
       water: "Sea",
-      avgPrice: 300,
+      avgPrice: 150,
       season: "Monsoon",
-      demand: 3,
-      description: "Soft, gelatinous fish often fried to a crisp exterior.",
-      location: "Open Sea",
-      catchingTime: "Morning",
+      demand: 4,
+      description: "A unique gelatinous fish dried and used as a condiment across coastal Maharashtra and Goa.",
+      location: "Coastal Estuary",
+      catchingTime: "Pre-dawn",
       trend: "flat",
-      uses: "Deep Fry",
+      uses: "Rava Fry / Dried / Pickle",
+    ),
+    FishItem(
+      name: "Red Snapper",
+      konkani: "Tamso",
+      marathi: "Tamso",
+      icon: "🐟",
+      imageUrl: "assets/images/red_snapper.png",
+      type: "Fish",
+      water: "Sea",
+      avgPrice: 650,
+      season: "Post-Monsoon",
+      demand: 4,
+      description: "Prized for its firm, mild white flesh, popular in Goan curry and grilled preparations.",
+      location: "Rocky Reefs, Goa",
+      catchingTime: "Pre-dawn",
+      trend: "up",
+      uses: "Curry / Grilled",
     ),
     FishItem(
       name: "Asian Seabass",
       konkani: "Chonak",
-      marathi: "Khajura",
+      marathi: "Chonak",
       icon: "🐟",
+      imageUrl: "assets/images/chonak.png",
       type: "Fish",
       water: "Brackish",
-      avgPrice: 650,
-      season: "Monsoon / Post-Monsoon",
+      avgPrice: 700,
+      season: "Year-round",
       demand: 4,
-      description: "A premium brackish water fish found in Goan estuaries.",
-      location: "Chapora River",
-      catchingTime: "Evening Tides",
+      description: "A premium fish found in Goan estuaries, farmed in khazan lands and wild-caught.",
+      location: "Mandovi & Zuari Rivers",
+      catchingTime: "Early Morning",
       trend: "up",
-      uses: "Steak Fry / Recheado",
+      uses: "Curry / Steamed / Grilled",
+    ),
+    FishItem(
+      name: "Shark",
+      konkani: "Mori",
+      marathi: "Mori",
+      icon: "🦈",
+      imageUrl: "assets/images/shark.png",
+      type: "Fish",
+      water: "Sea",
+      avgPrice: 350,
+      season: "Summer",
+      demand: 3,
+      description: "Locally caught shark (Mori) is a traditional delicacy in Goan cuisine.",
+      location: "Offshore Arabian Sea",
+      catchingTime: "Deep Sea",
+      trend: "down",
+      uses: "Curry / Dried",
     ),
     FishItem(
       name: "Tiger Prawns",
       konkani: "Sungta",
       marathi: "Kolambi",
       icon: "🦐",
+      imageUrl: "assets/images/prawns.png",
       type: "Prawn",
       water: "Brackish",
       avgPrice: 950,
       season: "Summer",
       demand: 5,
-      description: "Premium export-quality prawns from the khazan lands.",
-      location: "Mandovi Estuary",
+      description: "Premium large prawns found in Goan estuaries and khazan lands.",
+      location: "Mandovi / Zuari Estuaries",
       catchingTime: "Low Tide",
       trend: "up",
-      uses: "Export / Premium Dining",
+      uses: "Prawn Balchao / Butter Garlic",
     ),
     FishItem(
       name: "Mud Crab",
       konkani: "Kurlli",
       marathi: "Chimbori",
       icon: "🦀",
+      imageUrl: "assets/images/crab.png",
       type: "Crab",
       water: "Brackish",
-      avgPrice: 1100,
-      season: "Monsoon",
+      avgPrice: 1200,
+      season: "Post-Monsoon",
       demand: 5,
-      description: "Large, nutrient-rich crabs found in mangroves.",
-      location: "Zuari River Mangroves",
+      description: "Large, meaty crabs from Goan mangroves, prized for their sweet, dense flesh.",
+      location: "Zuari / Mandovi Mangroves",
       catchingTime: "Night",
       trend: "up",
-      uses: "Crab Xec Xec",
+      uses: "Crab Xacuti / Butter Garlic",
     ),
     FishItem(
-      name: "Red Snapper",
-      konkani: "Tamso",
-      marathi: "Tamb",
-      icon: "🐟",
-      type: "Fish",
+      name: "Lobster",
+      konkani: "Shevandi",
+      marathi: "Shevand",
+      icon: "🦞",
+      imageUrl: "assets/images/lobster.png",
+      type: "Crustacean",
       water: "Sea",
-      avgPrice: 550,
-      season: "Year-round",
-      demand: 4,
-      description: "Great for baking and slow-cooked Goan curries.",
-      location: "Dona Paula Rocks",
-      catchingTime: "Early Morning",
-      trend: "flat",
-      uses: "Baking / Curry",
-    ),
-    FishItem(
-      name: "Squid",
-      konkani: "Mankios",
-      marathi: "Squid",
-      icon: "🦑",
-      type: "Fish",
-      water: "Sea",
-      avgPrice: 350,
-      season: "Winter",
-      demand: 4,
-      description: "Cephalopod prized for its texture, standard in Calamari dishes.",
-      location: "Goan Coast",
+      avgPrice: 2500,
+      season: "Post-Monsoon",
+      demand: 5,
+      description: "A luxury seafood prized in starred restaurants and tourist eateries across Goa.",
+      location: "Rocky Offshore, North Goa",
       catchingTime: "Night",
       trend: "up",
-      uses: "Fried Rings / Amot-tik",
-    ),
-    FishItem(
-      name: "Pearl Spot",
-      konkani: "Kalundar",
-      marathi: "Karimeen",
-      icon: "🐟",
-      type: "Fish",
-      water: "Brackish",
-      avgPrice: 400,
-      season: "Year-round",
-      demand: 3,
-      description: "Oval-shaped fish from the backwaters, highly delicate flavor.",
-      location: "St Estevam Waters",
-      catchingTime: "Afternoon",
-      trend: "flat",
-      uses: "Baked in Banana Leaf",
+      uses: "Grilled / Thermidor",
     ),
     FishItem(
       name: "Mussels",
       konkani: "Xinaneto",
-      marathi: "Kalkav",
-      icon: "🐚",
+      marathi: "Shilgya",
+      icon: "🦪",
+      imageUrl: "assets/images/mussels.png",
       type: "Shellfish",
-      water: "Sea",
-      avgPrice: 150,
-      season: "Monsoon",
+      water: "Brackish",
+      avgPrice: 250,
+      season: "Post-Monsoon",
       demand: 4,
-      description: "Collected from rocks during low tide, a popular Goan street snack.",
-      location: "Candolim Rocks",
+      description: "Black-shelled bivalves farmed and wild-caught in Goan estuaries.",
+      location: "Zuari Estuary & Backwaters",
       catchingTime: "Low Tide",
       trend: "flat",
-      uses: "Rava Fry",
+      uses: "Tisreo Sukhem / Curry",
     ),
     FishItem(
-      name: "Lobster",
-      konkani: "Nustem",
-      marathi: "Shevandi",
-      icon: "🦞",
-      type: "Crab",
-      water: "Sea",
-      avgPrice: 2000,
-      season: "Winter",
-      demand: 5,
-      description: "The peak of luxury seafood, primarily for export and high-end hotels.",
-      location: "Deep Sea",
-      catchingTime: "Night",
-      trend: "flat",
-      uses: "Grilled Premium",
+      name: "Oysters",
+      konkani: "Kalva",
+      marathi: "Kalva",
+      icon: "🦪",
+      imageUrl: "assets/images/oysters.png",
+      type: "Shellfish",
+      water: "Brackish",
+      avgPrice: 600,
+      season: "Post-Monsoon",
+      demand: 4,
+      description: "Rich coastal shellfish farmed in Goan river beds and rocky shores.",
+      location: "Zuari Estuary",
+      catchingTime: "Low Tide",
+      trend: "up",
+      uses: "Rava Fry / Curry",
     ),
     FishItem(
-      name: "Shark",
-      konkani: "Mori",
-      marathi: "Mushi",
-      icon: "🦈",
-      type: "Fish",
+      name: "Squid",
+      konkani: "Mankios",
+      marathi: "Mankios",
+      icon: "🦑",
+      imageUrl: "assets/images/squid.png",
+      type: "Cephalopod",
       water: "Sea",
       avgPrice: 400,
-      season: "Year-round",
-      demand: 3,
-      description: "Smaller varieties used for the distinctive Mori Amot-tik curry.",
-      location: "Continental Shelf",
-      catchingTime: "Dawn",
-      trend: "down",
-      uses: "Spicy Curry",
+      season: "Post-Monsoon",
+      demand: 4,
+      description: "Tender squid, popular in Goan xacuti and cafreal preparations.",
+      location: "Coastal Goa",
+      catchingTime: "Night",
+      trend: "flat",
+      uses: "Squid Xacuti / Fried Rings",
     ),
   ];
+
 
   @override
   void initState() {
     super.initState();
     _filteredFishes = _allFishes;
-    _searchController.addListener(_filterList);
-    _loadAIRecommendations();
+    _loadLivePrices();
   }
 
-  Future<void> _loadAIRecommendations() async {
-    try {
-      // 1. Get Current Location
-      Position? position;
-      try {
-        LocationPermission permission = await Geolocator.checkPermission();
-        if (permission == LocationPermission.denied) {
-          permission = await Geolocator.requestPermission();
-        }
-        
-        if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
-          position = await Geolocator.getCurrentPosition(
-            desiredAccuracy: LocationAccuracy.high,
-            timeLimit: const Duration(seconds: 5),
-          );
-        }
-      } catch (e) {
-        print('Location sensor error: $e');
-      }
-
-      // 2. Fetch Weather for Location (or fallback to Panjim)
-      final double lat = position?.latitude ?? 15.4967;
-      final double lng = position?.longitude ?? 73.8263;
-      
-      final weatherService = WeatherService();
-      final weather = await weatherService.fetchWeatherData(lat: lat, lng: lng);
-      
-      final recs = await AISpeciesService.getLiveRecommendations(
-        temp: weather['temp'],
-        waveHeight: weather['wave_height'],
-        windSpeed: weather['wind_speed'],
-        condition: weather['condition'],
-        location: weather['location'] ?? "Current Coastal Zone",
-      );
-      
+  Future<void> _loadLivePrices() async {
+    // Trigger Firebase refresh (Gemini generates if stale)
+    await FishPriceService.ensurePricesAreFresh();
+    // Subscribe to live stream
+    FishPriceService.getPricesStream().listen((prices) {
+      if (!mounted) return;
       setState(() {
-        _aiRecommendations = recs;
-        _isAILoading = false;
+        for (final fish in _allFishes) {
+          final live = prices[fish.name];
+          if (live != null) {
+            fish.livePrice = live.price;
+            fish.liveTrend = live.trend;
+            fish.liveChangePct = live.changePct;
+            fish.priceLastUpdated = live.lastUpdated;
+          }
+        }
+        _filteredFishes = _allFishes;
+        _pricesLoading = false;
+        _pricesLastUpdated = prices.values.isNotEmpty
+            ? prices.values.first.lastUpdated
+            : DateTime.now();
       });
-    } catch (e) {
-      print('Error loading AI Recommendations in Directory: $e');
-      setState(() => _isAILoading = false);
-    }
-  }
-
-  void _filterList() {
-    final query = _searchController.text.toLowerCase();
-    setState(() {
-      _filteredFishes = _allFishes.where((fish) {
-        final matchesSearch = fish.name.toLowerCase().contains(query) || 
-                            fish.konkani.toLowerCase().contains(query) || 
-                            fish.marathi.toLowerCase().contains(query);
-        final matchesType = _selectedType == 'All' || fish.type == _selectedType;
-        final matchesWater = _selectedWater == 'All' || fish.water == _selectedWater;
-        return matchesSearch && matchesType && matchesWater;
-      }).toList();
     });
   }
 
-  void _showVoiceSearch() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        height: 250,
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text("LISTENING...", style: TextStyle(letterSpacing: 4, fontWeight: FontWeight.w900, color: Colors.blue, fontSize: 12)),
-            const SizedBox(height: 24),
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(color: Colors.blue.shade50, shape: BoxShape.circle),
-              child: const Icon(Icons.mic, size: 40, color: Colors.blue),
-            ),
-            const SizedBox(height: 24),
-            const Text("Say a fish name in Konkani or English", style: TextStyle(color: Colors.grey)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  bool _isMonsoon() {
-    final now = DateTime.now();
-    // Goan Fishing Ban: June 1st to July 31st
-    return now.month == 6 || now.month == 7;
-  }
-
-  bool _isRecommendedToday(String name) {
-    return _aiRecommendations.any((rec) => rec['name'].toString().toLowerCase().contains(name.toLowerCase()));
-  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        title: const Column(
-          children: [
-            Text('Maritime Directory', style: TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF1E293B), fontSize: 18)),
-            Text('GOA MARITIME INTELLIGENCE', style: TextStyle(fontSize: 8, letterSpacing: 2, color: Colors.blue, fontWeight: FontWeight.w900)),
-          ],
-        ),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Color(0xFF1E293B), size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.mic_none, color: Colors.blue),
-            onPressed: _showVoiceSearch,
-          )
-        ],
-      ),
-      body: Column(
+      backgroundColor: const Color(0xFFE0F7FA), // Light blue sea background color fallback
+      body: Stack(
         children: [
-          _buildSearchAndFilters(),
-          Expanded(
-            child: _filteredFishes.isEmpty 
-              ? _buildEmptyState()
-              : GridView.builder(
-                  padding: const EdgeInsets.all(20),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    childAspectRatio: 0.72,
-                    crossAxisSpacing: 16,
-                    mainAxisSpacing: 16,
-                  ),
-                  itemCount: _filteredFishes.length,
-                  itemBuilder: (context, index) {
-                    final fish = _filteredFishes[index];
-                    return _buildIntelligenceCard(fish);
-                  },
-                ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSearchAndFilters() {
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'Search (Konkani / Marathi / Hindi)...',
-                prefixIcon: const Icon(Icons.search, color: Colors.blue, size: 20),
-                filled: true,
-                fillColor: const Color(0xFFF1F5F9),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-                contentPadding: const EdgeInsets.symmetric(vertical: 0),
+          // Background Overlay (Sea Surface effect)
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.blue.shade100.withOpacity(0.4),
+                  Colors.white.withOpacity(0.8),
+                ],
               ),
             ),
           ),
-          const SizedBox(height: 12),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
+          SafeArea(
+            child: Column(
               children: [
-                _buildFilterChip('Type: ', ['All', 'Fish', 'Crab', 'Prawn'], _selectedType, (val) {
-                  setState(() => _selectedType = val);
-                  _filterList();
-                }),
-                const SizedBox(width: 8),
-                _buildFilterChip('Water: ', ['All', 'Sea', 'Brackish', 'River'], _selectedWater, (val) {
-                  setState(() => _selectedWater = val);
-                  _filterList();
-                }),
+                _buildTopRecommendations(),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  child: Text(
+                    'Available in Goa',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black,
+                      fontFamily: 'serif',
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: _filteredFishes.isEmpty 
+                    ? _buildEmptyState()
+                    : GridView.builder(
+                        padding: const EdgeInsets.all(24),
+                        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                          maxCrossAxisExtent: 280,
+                          mainAxisExtent: 320,
+                          crossAxisSpacing: 24,
+                          mainAxisSpacing: 24,
+                        ),
+                        itemCount: _filteredFishes.length,
+                        itemBuilder: (context, index) {
+                          final fish = _filteredFishes[index];
+                          return _buildProductCard(fish);
+                        },
+                      ),
+                ),
               ],
             ),
           ),
@@ -462,98 +390,147 @@ class _FishDirectoryScreenState extends State<FishDirectoryScreen> {
     );
   }
 
-  Widget _buildFilterChip(String label, List<String> options, String current, Function(String) onSelect) {
-    return Row(
+  Widget _buildTopRecommendations() {
+    final recommended = _allFishes.take(5).toList(); // Simple taking top 5 for "Best Catch"
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
-        ...options.map((opt) => Padding(
-          padding: const EdgeInsets.only(right: 4),
-          child: ChoiceChip(
-            label: Text(opt, style: const TextStyle(fontSize: 10)),
-            selected: current == opt,
-            onSelected: (_) => onSelect(opt),
-            selectedColor: Colors.blue.shade100,
-            backgroundColor: Colors.transparent,
-            padding: EdgeInsets.zero,
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 12, 24, 6),
+          child: Text(
+            'TODAY\'S BEST CATCH',
+            style: TextStyle(
+              fontSize: 14,
+              letterSpacing: 2,
+              fontWeight: FontWeight.w900,
+              color: Colors.black,
+            ),
           ),
-        )).toList(),
+        ),
+        SizedBox(
+          height: 155,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: recommended.length,
+            itemBuilder: (context, index) {
+              final fish = recommended[index];
+              return Container(
+                width: 150,
+                margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const SizedBox(height: 8),
+                    Expanded(
+                      child: Center(
+                        child: fish.imageUrl != null 
+                          ? Image.asset(fish.imageUrl!, fit: BoxFit.contain)
+                          : Text(fish.icon, style: const TextStyle(fontSize: 60)),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        children: [
+                          Text(
+                            fish.name,
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                            textAlign: TextAlign.center,
+                          ),
+                          Text(
+                            '₹${fish.currentPrice.toInt()}/kg',
+                            style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
       ],
     );
   }
 
-  Widget _buildIntelligenceCard(FishItem fish) {
-    bool recommended = _isRecommendedToday(fish.name);
-
-    return GestureDetector(
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => FishDetailScreen(fish: fish))),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 15, offset: const Offset(0, 8))],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Stack(
-              children: [
-                Container(
-                  height: 120,
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-                  ),
-                  child: Center(child: Text(fish.icon, style: const TextStyle(fontSize: 50))),
-                ),
-                if (recommended)
-                  Positioned(
-                    top: 12,
-                    right: 12,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(color: Colors.green, borderRadius: BorderRadius.circular(8)),
-                      child: const Text('RECOMMENDED', style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w900)),
-                    ),
-                  ),
-                Positioned(
-                  bottom: 0,
-                  left: 12,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(8))),
-                    child: Text('₹${fish.avgPrice.toInt()}/kg', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                  ),
-                ),
-              ],
+  Widget _buildProductCard(FishItem fish) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Title at top
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Text(
+              fish.name,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+                color: Color(0xFF455A64),
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(fish.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                  Text(fish.konkani, style: TextStyle(color: Colors.blue.shade700, fontSize: 11, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      _buildStatusIndicator(fish.isBanned || (_isMonsoon() && fish.water == 'Sea')),
-                      Row(
-                        children: List.generate(5, (i) => Icon(
-                          Icons.star, 
-                          size: 8, 
-                          color: i < fish.demand ? Colors.orange : Colors.grey.shade300
-                        )),
-                      ),
-                    ],
+          ),
+          // Large Fish Icon in middle
+          Expanded(
+            child: Center(
+              child: fish.imageUrl != null 
+                ? Image.asset(fish.imageUrl!, fit: BoxFit.contain)
+                : Text(fish.icon, style: const TextStyle(fontSize: 80)),
+            ),
+          ),
+          // See Details Button at bottom
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: OutlinedButton(
+              onPressed: () => Navigator.push(
+                context, 
+                MaterialPageRoute(builder: (context) => FishDetailScreen(fish: fish))
+              ),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: Color(0xFF039BE5)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                   Text(
+                    '> See Details',
+                    style: TextStyle(
+                      color: Color(0xFF0277BD),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ],
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -579,6 +556,7 @@ class _FishDirectoryScreenState extends State<FishDirectoryScreen> {
   }
 
   Widget _buildEmptyState() {
-    return const Center(child: Text('No species found matching your filters.'));
+    return const Center(child: Text('No match found'));
   }
+
 }

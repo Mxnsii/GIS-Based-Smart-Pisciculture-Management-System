@@ -4,10 +4,6 @@ import 'dart:math' as math;
 import '../services/notification_service.dart';
 import '../services/ml_prediction_service.dart';
 import '../widgets/weather_widget.dart';
-import '../services/ai_species_service.dart';
-import '../services/weather_service.dart';
-import 'package:geolocator/geolocator.dart';
-import 'fish_directory_screen.dart';
 
 class IotMonitoringScreen extends StatefulWidget {
   const IotMonitoringScreen({super.key});
@@ -17,16 +13,15 @@ class IotMonitoringScreen extends StatefulWidget {
 }
 
 class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
-
   Map<String, String> _lastAlertedIssues = {"Tilapia": "", "Asian Seabass": ""};
 
-  void _checkAndAlert(bool isDangerous, BuildContext context, String species, String disease) {
-    if (isDangerous && _lastAlertedIssues[species] != disease) {
+  void _checkAndAlert(int riskLevel, BuildContext context, String species, String disease) {
+    if (riskLevel > 0 && _lastAlertedIssues[species] != disease) {
       _lastAlertedIssues[species] = disease;
 
       NotificationService.showNotification(
         id: species.hashCode,
-        title: '⚠️ AI Alert: $species',
+        title: riskLevel == 2 ? '⚠️ High AI Alert: $species' : '⚠️ AI Warning: $species',
         body: 'Disease Predicted: $disease',
       );
 
@@ -37,25 +32,25 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
             return AlertDialog(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               title: Row(
-                children: const [
-                  Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
-                  SizedBox(width: 8),
+                children: [
+                  Icon(Icons.warning_amber_rounded, color: riskLevel == 2 ? Colors.red : Colors.orange, size: 28),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'AI RISK PREDICTION',
-                      style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
+                      riskLevel == 2 ? 'HIGH RISK DETECTED' : 'MEDIUM RISK WARNING',
+                      style: TextStyle(color: riskLevel == 2 ? Colors.red : Colors.orange, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ],
               ),
               content: Text(
-                'The ML model has predicted a high risk of disease for $species based on current water parameters:\n\n• Predicted: $disease\n\nPlease check the water conditions immediately.',
+                'The ML model has predicted a risk of disease for $species based on current water parameters:\n\n• Predicted: $disease\n\nPlease check the water conditions and log any visual symptoms.',
                 style: const TextStyle(fontSize: 16),
               ),
               actions: [
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.orange,
+                      backgroundColor: riskLevel == 2 ? Colors.red : Colors.orange,
                       foregroundColor: Colors.white),
                   onPressed: () {
                     Navigator.of(context).pop();
@@ -67,12 +62,10 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
           },
         );
       });
-    } else if (!isDangerous) {
+    } else if (riskLevel == 0) {
       _lastAlertedIssues[species] = "";
     }
   }
-
-
 
   @override
   Widget build(BuildContext context) {
@@ -121,8 +114,6 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
                   child: Column(
                     children: [
                       _buildSensorCard(sensorData),
-                      const SizedBox(height: 24),
-                      _buildRecommendationSection(sensorData['temperature'] as double),
                     ],
                   ),
                 );
@@ -134,186 +125,6 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
     );
   }
 
-  Widget _buildRecommendationSection(double currentTemp) {
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _fetchAiRecommendations(),
-      initialData: AISpeciesService.getFallbackRecommendations(currentTemp),
-      builder: (context, snapshot) {
-        final List<Map<String, dynamic>> recommendations = snapshot.data ?? [];
-        final bool isSyncing = snapshot.connectionState == ConnectionState.waiting;
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      '🐟 Best Species for Today',
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                    ),
-                    if (!isSyncing)
-                       Container(
-                        margin: const EdgeInsets.only(top: 4),
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.green.shade50,
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: Colors.green.shade100),
-                        ),
-                        child: Text(
-                          'LIVE AI VERIFIED',
-                          style: TextStyle(color: Colors.green.shade700, fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: 0.5),
-                        ),
-                      ),
-                  ],
-                ),
-                TextButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const FishDirectoryScreen()),
-                    );
-                  },
-                  child: const Text('View All', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            
-            SizedBox(
-              height: 200,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: recommendations.length,
-                separatorBuilder: (context, index) => const SizedBox(width: 16),
-                itemBuilder: (context, index) {
-                  final item = recommendations[index];
-                  return _buildSpeciesCard(
-                    name: item['name'],
-                    sub: item['sub'],
-                    price: item['price'],
-                    rating: item['rating'],
-                    trend: item['trend'],
-                    icon: item['icon'],
-                    trendIcon: _getTrendIcon(item['trendIcon']),
-                    bestTime: item['bestTime'],
-                  );
-                },
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-
-  IconData _getTrendIcon(String? trend) {
-    switch (trend?.toLowerCase()) {
-      case 'up': return Icons.trending_up;
-      case 'down': return Icons.trending_down;
-      default: return Icons.trending_flat;
-    }
-  }
-
-  Future<List<Map<String, dynamic>>> _fetchAiRecommendations() async {
-    try {
-      final weatherService = WeatherService();
-      
-      // Default to Panjim coords
-      double lat = 15.4909;
-      double lng = 73.8278;
-      
-      try {
-        final pos = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.low,
-          timeLimit: const Duration(seconds: 2),
-        );
-        lat = pos.latitude;
-        lng = pos.longitude;
-      } catch (_) {}
-
-      final weather = await weatherService.fetchWeatherData(lat: lat, lng: lng);
-      
-      return await AISpeciesService.getLiveRecommendations(
-        temp: (weather['temp'] as num).toDouble(),
-        waveHeight: (weather['wave_height'] as num).toDouble(),
-        windSpeed: (weather['wind_speed'] as num).toDouble(),
-        condition: weather['condition'],
-        location: weather['location'],
-      );
-    } catch (e) {
-      debugPrint('Error fetching AI recommendations: $e');
-      rethrow;
-    }
-  }
-
-  Widget _buildSpeciesCard({
-    required String name,
-    required String sub,
-    required String price,
-    required int rating,
-    required String trend,
-    required String icon,
-    required IconData trendIcon,
-    required String bestTime,
-  }) {
-    return Container(
-      width: 240,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4)),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(icon, style: const TextStyle(fontSize: 24)),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(8)),
-                child: Text(price, style: TextStyle(color: Colors.blue.shade800, fontWeight: FontWeight.bold, fontSize: 12)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          Text(sub, style: TextStyle(color: Colors.grey.shade600, fontSize: 11)),
-          const SizedBox(height: 12),
-          Row(
-            children: List.generate(5, (i) => Icon(Icons.star, size: 12, color: i < rating ? Colors.orange : Colors.grey.shade300)),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Icon(trendIcon, size: 14, color: Colors.blueGrey),
-              const SizedBox(width: 4),
-              Expanded(child: Text(trend, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis)),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              const Icon(Icons.access_time, size: 14, color: Colors.orange),
-              const SizedBox(width: 4),
-              Text('Time: $bestTime', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600)),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildSensorCard(Map<String, dynamic> data) {
 
@@ -396,25 +207,31 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
         bool isWaiting = snapshot.connectionState == ConnectionState.waiting;
         String status = "AI Analyzing...";
         Color statusColor = Colors.grey;
-        bool isDangerous = false;
+        int riskLevel = 0;
 
         if (snapshot.hasError) {
           status = "ML Server Offline";
           statusColor = Colors.orange;
         } else if (snapshot.hasData) {
           status = snapshot.data!;
-          if (status.toLowerCase().contains("healthy") || status.toLowerCase().contains("safe") || status.trim().isEmpty) {
+          String lowerStatus = status.toLowerCase();
+          
+          if (lowerStatus.contains("healthy") || lowerStatus.contains("safe") || status.trim().isEmpty) {
             status = "Healthy";
             statusColor = Colors.green;
+            riskLevel = 0;
+          } else if (lowerStatus.contains("mild")) {
+            statusColor = Colors.orange;
+            riskLevel = 1;
           } else {
             statusColor = Colors.red;
-            isDangerous = true;
+            riskLevel = 2;
           }
         }
 
         // Trigger alert only when not waiting
         if (!isWaiting && snapshot.hasData) {
-          _checkAndAlert(isDangerous, context, species, status);
+          _checkAndAlert(riskLevel, context, species, status);
         }
 
         return Container(
@@ -463,7 +280,13 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
                        const Icon(Icons.health_and_safety, size: 16, color: Colors.blueGrey),
                        const SizedBox(width: 8),
                        const Text('Status: ', style: TextStyle(color: Colors.black87)),
-                       Text(isDangerous ? "High Risk" : (isWaiting ? "Computing" : "Safe"), style: TextStyle(fontWeight: FontWeight.bold, color: isDangerous ? Colors.red : (isWaiting ? Colors.grey : Colors.green))),
+                       Text(
+                         riskLevel == 2 ? "High Risk" : (riskLevel == 1 ? "Medium Risk" : (isWaiting ? "Computing" : "Safe")), 
+                         style: TextStyle(
+                           fontWeight: FontWeight.bold, 
+                           color: riskLevel == 2 ? Colors.red : (riskLevel == 1 ? Colors.orange : (isWaiting ? Colors.grey : Colors.green))
+                         )
+                       ),
                     ],
                   ),
                 ],

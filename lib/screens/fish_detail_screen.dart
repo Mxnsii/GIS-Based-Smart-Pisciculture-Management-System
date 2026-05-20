@@ -23,17 +23,12 @@ class FishDetailScreen extends StatelessWidget {
                   const SizedBox(height: 32),
                   _buildMetricDashboard(),
                   const SizedBox(height: 32),
-                  _buildDescriptionSection(),
-                  const SizedBox(height: 32),
-                  _buildAIOptimizationSection(),
-                  const SizedBox(height: 100), // Bottom padding
                 ],
               ),
             ),
           ),
         ],
       ),
-      bottomSheet: _buildActionFooter(),
     );
   }
 
@@ -48,7 +43,20 @@ class FishDetailScreen extends StatelessWidget {
         onPressed: () => Navigator.pop(context),
       ),
       flexibleSpace: FlexibleSpaceBar(
-        background: Center(child: Text(fish.icon, style: const TextStyle(fontSize: 100))),
+        background: Center(
+          child: fish.imageUrl != null
+              ? Padding(
+                  padding: const EdgeInsets.all(40.0),
+                  child: Image.asset(
+                    fish.imageUrl!,
+                    fit: BoxFit.contain,
+                  ),
+                )
+              : Text(
+                  fish.icon,
+                  style: const TextStyle(fontSize: 100),
+                ),
+        ),
       ),
     );
   }
@@ -81,7 +89,7 @@ class FishDetailScreen extends StatelessWidget {
   }
 
   Widget _buildTrendBadge() {
-    bool isUp = fish.trend == 'up';
+    bool isUp = fish.currentTrend == 'up';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
@@ -107,7 +115,7 @@ class FishDetailScreen extends StatelessWidget {
       ),
       child: Column(
         children: [
-          _buildMetricRow(Icons.currency_rupee, "Market Price", "₹${fish.avgPrice.toInt()}/kg", Colors.green),
+          _buildMetricRow(Icons.currency_rupee, "Market Price", "₹${fish.currentPrice.toInt()}/kg", Colors.green),
           const Divider(height: 24),
           _buildMetricRow(Icons.waves, "Habitat", fish.water, Colors.blue),
           const Divider(height: 24),
@@ -137,92 +145,4 @@ class FishDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildDescriptionSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text("BIOLOGY & USES", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.grey, letterSpacing: 1.5)),
-        const SizedBox(height: 12),
-        Text(fish.description, style: const TextStyle(fontSize: 16, color: Color(0xFF475569), height: 1.6)),
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(8)),
-          child: Text("Best for: ${fish.uses}", style: TextStyle(fontSize: 12, color: Colors.blue.shade800, fontWeight: FontWeight.bold)),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildAIOptimizationSection() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(colors: [Colors.blue.shade900, Colors.blue.shade700]),
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.auto_awesome, color: Colors.white, size: 20),
-              SizedBox(width: 8),
-              Text("AI RECOMMENDATION", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 1)),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Text(
-            "Based on today's environmental conditions, ${fish.name} is ${fish.isBanned ? 'NOT ALLOWED due to monsoon fishing ban.' : 'HIGHLY RECOMMENDED as market demand is peaking and sea conditions are stable.'}",
-            style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.5),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _buildSimpleBadge(Icons.star, "Demand: ${fish.demand}/5"),
-              _buildSimpleBadge(Icons.check_circle, "Verified"),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSimpleBadge(IconData icon, String text) {
-    return Row(
-      children: [
-        Icon(icon, size: 14, color: Colors.white70),
-        const SizedBox(width: 4),
-        Text(text, style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold)),
-      ],
-    );
-  }
-
-  Widget _buildActionFooter() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, offset: const Offset(0, -5))],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: ElevatedButton(
-              onPressed: () {},
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1E293B),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 20),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              ),
-              child: const Text('VIEW NEARBY MARKETS', style: TextStyle(fontWeight: FontWeight.bold)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }

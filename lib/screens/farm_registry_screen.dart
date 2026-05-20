@@ -744,11 +744,7 @@ class _FarmRegistryScreenState extends State<FarmRegistryScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Farm Registry',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 24),
+
           // Search and Filter Options
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
