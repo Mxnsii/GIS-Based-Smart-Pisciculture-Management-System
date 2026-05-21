@@ -1,46 +1,17 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-
 class SpeciesPredictionService {
-  // Remote API URL pointing to the Render instance (assuming it will be updated by the user)
-  static const String _apiUrl = "https://gis-based-smart-pisciculture-management.onrender.com/predict_species";
-
-  /// Analyzes water parameters to recommend the best species.
-  /// Safely falls back to local logic if the cloud server is unavailable.
+  /// Calculates species suitability directly from sensor readings.
+  ///
+  /// This uses the local species prediction logic defined in the model file,
+  /// rather than relying on remote API output.
   static Future<List<Map<String, dynamic>>> getSpeciesRecommendations({
     required double temperature,
     required double ph,
     required double salinity,
     required double turbidity,
   }) async {
-    try {
-      final response = await http.post(
-        Uri.parse(_apiUrl),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          "temperature": temperature,
-          "pH": ph,
-          "salinity": salinity,
-          "turbidity": turbidity,
-        }),
-      ).timeout(const Duration(seconds: 10)); // Prevent hanging
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data.containsKey("recommendations")) {
-          return List<Map<String, dynamic>>.from(data["recommendations"]);
-        }
-        return _getLocalFallbackRecommendations(temperature, ph, salinity, turbidity);
-      } else {
-        print("Species API Error: HTTP ${response.statusCode}");
-        return _getLocalFallbackRecommendations(temperature, ph, salinity, turbidity);
-      }
-    } catch (e) {
-      print("Species API Exception (Falling back to local computation): $e");
-      return _getLocalFallbackRecommendations(temperature, ph, salinity, turbidity);
-    }
+    // Use the local species prediction model to calculate suitability scores
+    // directly from current sensor readings.
+    return _getLocalFallbackRecommendations(temperature, ph, salinity, turbidity);
   }
 
   /// Backup logic mimicking the Random Forest model's behavior
@@ -89,25 +60,23 @@ class SpeciesPredictionService {
     // Convert to list and sort
     List<Map<String, dynamic>> results = [];
     scores.forEach((species, score) {
-      if (score >= 20) {
-        String status = "";
-        if (score >= 85) {
-          status = "Highly Suitable";
-        } else if (score >= 70) {
-          status = "Suitable";
-        } else if (score >= 50) {
-          status = "Moderately Suitable";
-        } else {
-          status = "Low Suitability";
-        }
-
-        results.add({
-          "species": species,
-          "score": score.toDouble(), // Return as double matching Python output
-          "status": status,
-          "isLocalFallback": true, // Flag to show it's computed locally
-        });
+      String status = "";
+      if (score >= 85) {
+        status = "Highly Suitable";
+      } else if (score >= 70) {
+        status = "Suitable";
+      } else if (score >= 50) {
+        status = "Moderately Suitable";
+      } else {
+        status = "Low Suitability";
       }
+
+      results.add({
+        "species": species,
+        "score": score.toDouble(),
+        "status": status,
+        "isLocalFallback": true,
+      });
     });
 
     results.sort((a, b) => b["score"].compareTo(a["score"]));

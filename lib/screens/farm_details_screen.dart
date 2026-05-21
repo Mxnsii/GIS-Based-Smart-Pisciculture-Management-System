@@ -17,7 +17,7 @@ class FarmDetailsScreen extends StatefulWidget {
 
 class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
   String _selectedMetric = 'Temperature'; // Default metric
-  final List<String> _metrics = ['Temperature', 'pH', 'Turbidity'];
+  final List<String> _metrics = ['Temperature', 'pH', 'Turbidity', 'Salinity'];
   @override
   Widget build(BuildContext context) {
     final String status = (widget.farmData['status'] ?? '').toString();
@@ -269,6 +269,7 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
       case 'Temperature': return '°C';
       case 'pH': return '';
       case 'Turbidity': return 'NTU';
+      case 'Salinity': return 'ppt';
       default: return '';
     }
   }
@@ -361,6 +362,8 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
                     value = (data['pH'] as num?)?.toDouble();
                   } else if (_selectedMetric == 'Turbidity') {
                     value = (data['turbidity'] as num?)?.toDouble();
+                  } else if (_selectedMetric == 'Salinity') {
+                    value = (data['salinity'] as num?)?.toDouble();
                   }
 
                   if (value != null) {
@@ -557,6 +560,7 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
       case 'Temperature': return Colors.orange;
       case 'pH': return Colors.green;
       case 'Turbidity': return Colors.brown;
+      case 'Salinity': return Colors.blue;
       default: return Colors.blue;
     }
   }

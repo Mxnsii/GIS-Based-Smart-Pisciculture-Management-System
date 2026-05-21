@@ -26,8 +26,8 @@ class _LandingPageState extends State<LandingPage> {
       species: "Tilapia",
       temperature: 31,
       ph: 6.2,
+      salinity: 15.0,
       turbidity: 30,
-      dissolvedOxygen: 4,
     );
 
     print("Prediction: $result");

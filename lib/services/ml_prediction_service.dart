@@ -11,8 +11,8 @@ class MlPredictionService {
     required String species,
     required double temperature,
     required double ph,
+    required double salinity,
     required double turbidity,
-    required double dissolvedOxygen,
   }) async {
     try {
       final response = await http.post(
@@ -24,33 +24,66 @@ class MlPredictionService {
           "species": species,
           "temperature": temperature,
           "pH": ph,
-          "turbidity": turbidity,
-          "do": dissolvedOxygen,
+          "turbidity": salinity, // maps to salinity in hosted API
+          "do": turbidity,       // maps to turbidity in hosted API
         }),
       ).timeout(const Duration(seconds: 10)); // Prevent the app from hanging if service is slow
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        return data["prediction"] ?? "Unknown (API returned empty)";
+        final String basePrediction = data["prediction"] ?? "Unknown (API returned empty)";
+        final String bacterialRisk = _getBacterialInfectionRisk(temperature, ph, salinity, turbidity);
+        return "$basePrediction | Bacterial Infection Risk: $bacterialRisk";
       } else {
         print("ML API Error: HTTP ${response.statusCode}");
-        return _getLocalFallbackPrediction(species, temperature, ph, turbidity);
+        return _getLocalFallbackPrediction(species, temperature, ph, salinity, turbidity);
       }
     } catch (e) {
       // If server is spinning down or unavailable, use the fallback
       print("ML API Exception (Falling back to local computation): $e");
-      return _getLocalFallbackPrediction(species, temperature, ph, turbidity);
+      return _getLocalFallbackPrediction(species, temperature, ph, salinity, turbidity);
     }
   }
 
+  static String _getBacterialInfectionRisk(double temperature, double ph, double salinity, double turbidity) {
+    int riskScore = 0;
+
+    if (turbidity > 30) {
+      riskScore += 2;
+    } else if (turbidity > 20) {
+      riskScore += 1;
+    }
+
+    if (temperature >= 26 && temperature <= 32) {
+      riskScore += 1;
+    }
+
+    if (ph >= 6.5 && ph <= 8.5) {
+      riskScore += 1;
+    }
+
+    if (salinity <= 10) {
+      riskScore += 1;
+    }
+
+    if (riskScore >= 4) {
+      return 'High';
+    } else if (riskScore >= 2) {
+      return 'Moderate';
+    }
+    return 'Low';
+  }
+
   /// Backup logic mimicking previous local conditions in case of network failures
-  static String _getLocalFallbackPrediction(String species, double temperature, double ph, double turbidity) {
+  static String _getLocalFallbackPrediction(String species, double temperature, double ph, double salinity, double turbidity) {
     // Define acceptable ranges based on species
     double minTemp = species.toLowerCase().contains("seabass") ? 26.0 : 24.0;
     double maxTemp = species.toLowerCase().contains("seabass") ? 32.0 : 30.0;
     double minPh = species.toLowerCase().contains("seabass") ? 7.0 : 6.5;
     double maxPh = species.toLowerCase().contains("seabass") ? 8.5 : 9.0;
     double maxTurb = species.toLowerCase().contains("seabass") ? 20.0 : 25.0;
+    double minSal = species.toLowerCase().contains("seabass") ? 10.0 : 0.0;
+    double maxSal = species.toLowerCase().contains("seabass") ? 30.0 : 5.0;
 
     int riskScore = 0;
     List<String> riskFactors = [];
@@ -73,6 +106,15 @@ class MlPredictionService {
       riskFactors.add("Mild pH Alert");
     }
 
+    // Analyze Salinity
+    if (salinity < minSal - 5 || salinity > maxSal + 5) {
+      riskScore += 2;
+      riskFactors.add("Critical Salinity");
+    } else if (salinity < minSal || salinity > maxSal) {
+      riskScore += 1;
+      riskFactors.add("Unstable Salinity");
+    }
+
     // Analyze Turbidity
     if (turbidity > maxTurb + 10) {
       riskScore += 2;
@@ -82,13 +124,16 @@ class MlPredictionService {
       riskFactors.add("Elevated Turbidity");
     }
 
-    // Return prediction based on overall risk score
+    final String bacterialRisk = _getBacterialInfectionRisk(temperature, ph, salinity, turbidity);
+    final String basePrediction;
     if (riskScore == 0) {
-      return "Healthy / Safe conditions (Local)";
+      basePrediction = "Healthy / Safe conditions (Local)";
     } else if (riskScore <= 2) {
-      return "Mild risk: ${riskFactors.join(', ')} (Local)";
+      basePrediction = "Mild risk: ${riskFactors.join(', ')} (Local)";
     } else {
-      return "High risk: ${riskFactors.join(', ')} (Local)";
+      basePrediction = "High risk: ${riskFactors.join(', ')} (Local)";
     }
+
+    return "$basePrediction | Bacterial Infection Risk: $bacterialRisk";
   }
 }

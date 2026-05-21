@@ -38,13 +38,29 @@ class AlertsScreen extends StatelessWidget {
                 double temp = double.tryParse(doc['temperature']?.toString() ?? '0') ?? 0.0;
                 double ph = double.tryParse((doc['pH'] ?? doc['ph'])?.toString() ?? '0') ?? 0.0;
                 double turbidity = double.tryParse(doc['turbidity']?.toString() ?? '0') ?? 0.0;
+                double salinity = double.tryParse(doc['salinity']?.toString() ?? '0') ?? 0.0;
 
                 List<Widget> alerts = [];
+
+                if (salinity > 35) {
+                  alerts.add(_buildAlertCard(
+                    title: "High Salinity Level",
+                    description: "Salinity is above safe range (≤ 35 ppt). Current: $salinity ppt. Unsafe range: > 35 ppt.",
+                    severity: AlertSeverity.critical,
+                    type: "IoT Monitor",
+                    time: "Just now",
+                    recommendations: [
+                      "Add fresh water to reduce salt concentration",
+                      "Ensure proper shading to limit evaporation",
+                      "Monitor species closely for osmotic stress",
+                    ],
+                  ));
+                }
 
                 if (ph < 6.5) {
                   alerts.add(_buildAlertCard(
                     title: "Low pH Level",
-                    description: "pH is below safe range (6.5). Current: $ph",
+                    description: "pH is below safe range (6.5–8.5). Current: $ph. Unsafe range: < 6.5.",
                     severity: AlertSeverity.critical,
                     type: "IoT Monitor",
                     time: "Just now",
@@ -57,7 +73,7 @@ class AlertsScreen extends StatelessWidget {
                 } else if (ph > 8.5) {
                   alerts.add(_buildAlertCard(
                     title: "High pH Level",
-                    description: "pH is above safe range (8.5). Current: $ph",
+                    description: "pH is above safe range (6.5–8.5). Current: $ph. Unsafe range: > 8.5.",
                     severity: AlertSeverity.critical,
                     type: "IoT Monitor",
                     time: "Just now",
@@ -73,7 +89,7 @@ class AlertsScreen extends StatelessWidget {
                 if (temp < 24) {
                   alerts.add(_buildAlertCard(
                     title: "Low Temperature",
-                    description: "Temperature is too low (< 24°C). Current: $temp°C",
+                    description: "Temperature is too low for most species (safe 24–30°C). Current: $temp°C. Unsafe range: < 24°C.",
                     severity: AlertSeverity.warning,
                     type: "IoT Monitor",
                     time: "Just now",
@@ -87,7 +103,7 @@ class AlertsScreen extends StatelessWidget {
                 } else if (temp > 30) {
                   alerts.add(_buildAlertCard(
                     title: "High Temperature",
-                    description: "Temperature exceeded safe limit (> 30°C). Current: $temp°C",
+                    description: "Temperature exceeded safe range (24–30°C). Current: $temp°C. Unsafe range: > 30°C.",
                     severity: AlertSeverity.warning,
                     type: "IoT Monitor",
                     time: "Just now",
@@ -103,7 +119,7 @@ class AlertsScreen extends StatelessWidget {
                 if (turbidity < 2) {
                   alerts.add(_buildAlertCard(
                     title: "Low Turbidity",
-                    description: "Turbidity is very low (< 2 NTU). Current: $turbidity",
+                    description: "Turbidity is very low for plankton growth (safe 2–20 NTU). Current: $turbidity. Unsafe range: < 2 NTU.",
                     severity: AlertSeverity.warning,
                     type: "IoT Monitor",
                     time: "Just now",
@@ -115,7 +131,7 @@ class AlertsScreen extends StatelessWidget {
                 } else if (turbidity > 20) {
                   alerts.add(_buildAlertCard(
                     title: "High Turbidity",
-                    description: "Turbidity above safe limit (> 20 NTU). Current: $turbidity",
+                    description: "Turbidity is above safe range (2–20 NTU). Current: $turbidity. Unsafe range: > 20 NTU.",
                     severity: AlertSeverity.critical,
                     type: "IoT Monitor",
                     time: "Just now",

@@ -2,7 +2,7 @@ class WaterReading {
   final double ph;
   final double temperature;
   final double turbidity;
-  final double dissolvedOxygen;
+  final double salinity;
   final double ammonia;
   final double lat;
   final double lng;
@@ -13,7 +13,7 @@ class WaterReading {
     required this.ph,
     required this.temperature,
     required this.turbidity,
-    required this.dissolvedOxygen,
+    required this.salinity,
     required this.ammonia,
     required this.lat,
     required this.lng,
