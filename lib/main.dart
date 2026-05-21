@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'screens/login_screen.dart';
-import 'screens/landing_page.dart'; // Your landing page
+import 'screens/landing_page.dart';
 import 'theme/app_theme.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'services/notification_service.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:flutter/foundation.dart'; // Add this at the top for kIsWeb
+import 'package:flutter/foundation.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -20,22 +20,27 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
   try {
-    // Initialize Firebase
+    await dotenv.load(fileName: ".env");
+  } catch (e) {
+    debugPrint("DotEnv load error: $e");
+  }
+
+  try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-    
+
     FirebaseMessaging messaging = FirebaseMessaging.instance;
+
     await messaging.requestPermission(
       alert: true,
       badge: true,
       sound: true,
     );
-    
+
     if (!kIsWeb) {
-      // Background notifications and manual topic subscriptions are 
-      // strictly reserved for native Android/iOS mobile environments
       await messaging.subscribeToTopic('farmer_alerts');
       FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
     }
@@ -65,7 +70,7 @@ class MyApp extends StatelessWidget {
           Theme.of(context).textTheme,
         ),
       ),
-      home: const LandingPage(), // Show Landing Page as home
+      home: const LandingPage(),
       debugShowCheckedModeBanner: false,
     );
   }

@@ -8,6 +8,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../widgets/weather_widget.dart';
 import '../widgets/custom_back_button.dart';
 import 'authority_complaints_screen.dart'; // Implemented Authority Complaints Tab
+import 'chatbot_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final String userName;
@@ -87,6 +88,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
             )),
       ),
       body: _pages[_selectedIndex],
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const ChatbotScreen(),
+            ),
+          );
+        },
+        backgroundColor: Colors.blueAccent,
+        icon: const Icon(Icons.support_agent, color: Colors.white),
+        label: const Text('GIS Agent', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+      ),
       bottomNavigationBar: BottomNavigationBar(
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(
@@ -151,26 +165,9 @@ class DashboardHomeView extends StatelessWidget {
             children: [
               _buildStatCard(
                 title: 'Total Registered Farms',
-                valueWidget: StreamBuilder<QuerySnapshot>(
-                  stream: FirebaseFirestore.instance.collection('farms').snapshots(),
-                  builder: (context, snapshot) {
-                     int mockFarmsCount = 4; // The predefined farms length
-                     int firebaseFarmsCount = 0;
-                     if (snapshot.hasData) {
-                       for (var doc in snapshot.data!.docs) {
-                         final data = doc.data() as Map<String, dynamic>;
-                         // Filter out unnamed farms just like registry
-                         if (data['name'] == null || data['name'].toString().trim().isEmpty || data['name'] == 'Unknown Farm') {
-                           continue;
-                         }
-                         firebaseFarmsCount++;
-                       }
-                     }
-                     return Text(
-                       '${mockFarmsCount + firebaseFarmsCount}',
-                       style: const TextStyle(color: Colors.blue, fontSize: 32, fontWeight: FontWeight.bold),
-                     );
-                  },
+                valueWidget: const Text(
+                  '4',
+                  style: TextStyle(color: Colors.blue, fontSize: 32, fontWeight: FontWeight.bold),
                 ),
                 color: Colors.blue,
                 onTap: () => onTabChange(2), // Index 2: Farm Registry

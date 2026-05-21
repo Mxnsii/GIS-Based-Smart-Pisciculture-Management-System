@@ -424,10 +424,23 @@ class _GisMapViewState extends State<GisMapView> {
             },
             child: Tooltip(
               message: '${farm['name']}\nLat: $lat, Lng: $lng',
-              child: Icon(
-                Icons.location_on,
-                color: _getStatusColor(farm['status'] ?? 'Unknown'),
-                size: 40,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Icon(
+                    Icons.location_on,
+                    color: _getStatusColor(farm['status'] ?? 'Unknown'),
+                    size: 40,
+                  ),
+                  const Positioned(
+                    top: 6,
+                    child: Icon(
+                      Icons.agriculture,
+                      color: Colors.white,
+                      size: 16,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),

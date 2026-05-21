@@ -5,6 +5,7 @@ import 'hatcheries_screen.dart';
 import 'login_screen.dart';
 import 'govt_schemes_screen.dart';
 import 'complaint_registry_screen.dart'; // Import for illegal fishing reporting
+import 'chatbot_screen.dart';
 import 'fish_directory_screen.dart'; // Import for fish directory
 import 'species_recommendation_screen.dart';
 
@@ -61,6 +62,18 @@ class _FarmerScreenState extends State<FarmerScreen> {
             ),
           ),
           IconButton(
+            tooltip: 'Open GIS Agent',
+            icon: const Icon(Icons.support_agent, color: Colors.blueAccent),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const ChatbotScreen(),
+                ),
+              );
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.logout, color: Colors.black),
             onPressed: () {
               Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
@@ -81,6 +94,22 @@ class _FarmerScreenState extends State<FarmerScreen> {
             )),
       ),
       body: _selectedIndex == 6 ? _complaintTab : _pages[_selectedIndex],
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const ChatbotScreen(),
+            ),
+          );
+        },
+        backgroundColor: Colors.blueAccent,
+        icon: const Icon(Icons.support_agent, color: Colors.white),
+        label: const Text(
+          'GIS Agent',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+      ),
       bottomNavigationBar: BottomNavigationBar(
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(
