@@ -239,9 +239,23 @@ class _WeatherWidgetState extends State<WeatherWidget> with SingleTickerProvider
 
     return Container(
       decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
         borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: Colors.indigoAccent.withOpacity(0.35),
+          width: 1.5,
+        ),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 20, offset: const Offset(0, 10)),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.3),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+          BoxShadow(
+            color: Colors.indigoAccent.withOpacity(0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
         ],
       ),
       child: ClipRRect(
@@ -250,11 +264,12 @@ class _WeatherWidgetState extends State<WeatherWidget> with SingleTickerProvider
           children: [
             Container(
               padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 gradient: LinearGradient(
-                  colors: isLoading 
-                    ? [Colors.blue.shade900, Colors.blue.shade700]
-                    : [Colors.blue.shade800, Colors.blue.shade400],
+                  colors: [
+                    Color(0xFF1E293B), // Premium Slate Navy
+                    Color(0xFF0F172A), // Deep Slate Navy
+                  ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),

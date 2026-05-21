@@ -17,47 +17,62 @@ class SpeciesPredictionService {
   /// Backup logic mimicking the Random Forest model's behavior
   static List<Map<String, dynamic>> _getLocalFallbackRecommendations(
       double temp, double ph, double salinity, double turbidity) {
-        
-    // Mimic the ranges defined in species_rec.ipynb
-    Map<String, int> scores = {
-      "Whiteleg Shrimp": 0,
-      "Tiger Shrimp": 0,
-      "Tilapia": 0,
-      "Catfish": 0,
-      "Milkfish": 0,
+
+    double scoreParameter(double value, double min, double max, int weight) {
+      final double midpoint = (min + max) / 2;
+      final double halfRange = (max - min) / 2;
+      if (halfRange <= 0) {
+        return value == min ? weight.toDouble() : 0.0;
+      }
+
+      if (value >= min && value <= max) {
+        final double distance = (value - midpoint).abs();
+        // Keep safe values high, but still vary scores inside the range.
+        return weight * (1.0 - 0.25 * (distance / halfRange));
+      }
+
+      final double diff = value < min ? min - value : value - max;
+      return weight * (0.75 - 0.75 * (diff / halfRange)).clamp(0.0, 0.75);
+    }
+
+    Map<String, double> scores = {
+      "Whiteleg Shrimp": 0.0,
+      "Tiger Shrimp": 0.0,
+      "Tilapia": 0.0,
+      "Catfish": 0.0,
+      "Milkfish": 0.0,
     };
 
     // Whiteleg Shrimp (Temp 28-32, pH 7.5-8.5, Salinity 15-25, Turbidity 20-50)
-    if (temp >= 28 && temp <= 32) scores["Whiteleg Shrimp"] = (scores["Whiteleg Shrimp"] ?? 0) + 30;
-    if (ph >= 7.5 && ph <= 8.5) scores["Whiteleg Shrimp"] = (scores["Whiteleg Shrimp"] ?? 0) + 20;
-    if (salinity >= 15 && salinity <= 25) scores["Whiteleg Shrimp"] = (scores["Whiteleg Shrimp"] ?? 0) + 40;
-    if (turbidity >= 20 && turbidity <= 50) scores["Whiteleg Shrimp"] = (scores["Whiteleg Shrimp"] ?? 0) + 10;
+    scores["Whiteleg Shrimp"] = (scores["Whiteleg Shrimp"] ?? 0) + scoreParameter(temp, 28, 32, 30);
+    scores["Whiteleg Shrimp"] = (scores["Whiteleg Shrimp"] ?? 0) + scoreParameter(ph, 7.5, 8.5, 20);
+    scores["Whiteleg Shrimp"] = (scores["Whiteleg Shrimp"] ?? 0) + scoreParameter(salinity, 15, 25, 40);
+    scores["Whiteleg Shrimp"] = (scores["Whiteleg Shrimp"] ?? 0) + scoreParameter(turbidity, 20, 50, 10);
 
     // Tiger Shrimp (Temp 27-31, pH 7.5-8.5, Salinity 15-30, Turbidity 25-55)
-    if (temp >= 27 && temp <= 31) scores["Tiger Shrimp"] = (scores["Tiger Shrimp"] ?? 0) + 30;
-    if (ph >= 7.5 && ph <= 8.5) scores["Tiger Shrimp"] = (scores["Tiger Shrimp"] ?? 0) + 20;
-    if (salinity >= 15 && salinity <= 30) scores["Tiger Shrimp"] = (scores["Tiger Shrimp"] ?? 0) + 40;
-    if (turbidity >= 25 && turbidity <= 55) scores["Tiger Shrimp"] = (scores["Tiger Shrimp"] ?? 0) + 10;
+    scores["Tiger Shrimp"] = (scores["Tiger Shrimp"] ?? 0) + scoreParameter(temp, 27, 31, 30);
+    scores["Tiger Shrimp"] = (scores["Tiger Shrimp"] ?? 0) + scoreParameter(ph, 7.5, 8.5, 20);
+    scores["Tiger Shrimp"] = (scores["Tiger Shrimp"] ?? 0) + scoreParameter(salinity, 15, 30, 40);
+    scores["Tiger Shrimp"] = (scores["Tiger Shrimp"] ?? 0) + scoreParameter(turbidity, 25, 55, 10);
 
     // Tilapia (Temp 24-30, pH 6.5-8.5, Salinity 0-5, Turbidity 10-30)
-    if (temp >= 24 && temp <= 30) scores["Tilapia"] = (scores["Tilapia"] ?? 0) + 30;
-    if (ph >= 6.5 && ph <= 8.5) scores["Tilapia"] = (scores["Tilapia"] ?? 0) + 20;
-    if (salinity >= 0 && salinity <= 5) scores["Tilapia"] = (scores["Tilapia"] ?? 0) + 40;
-    if (turbidity >= 10 && turbidity <= 30) scores["Tilapia"] = (scores["Tilapia"] ?? 0) + 10;
+    scores["Tilapia"] = (scores["Tilapia"] ?? 0) + scoreParameter(temp, 24, 30, 30);
+    scores["Tilapia"] = (scores["Tilapia"] ?? 0) + scoreParameter(ph, 6.5, 8.5, 20);
+    scores["Tilapia"] = (scores["Tilapia"] ?? 0) + scoreParameter(salinity, 0, 5, 40);
+    scores["Tilapia"] = (scores["Tilapia"] ?? 0) + scoreParameter(turbidity, 10, 30, 10);
 
     // Catfish (Temp 25-32, pH 6.5-8, Salinity 0-8, Turbidity 15-40)
-    if (temp >= 25 && temp <= 32) scores["Catfish"] = (scores["Catfish"] ?? 0) + 30;
-    if (ph >= 6.5 && ph <= 8) scores["Catfish"] = (scores["Catfish"] ?? 0) + 20;
-    if (salinity >= 0 && salinity <= 8) scores["Catfish"] = (scores["Catfish"] ?? 0) + 40;
-    if (turbidity >= 15 && turbidity <= 40) scores["Catfish"] = (scores["Catfish"] ?? 0) + 10;
+    scores["Catfish"] = (scores["Catfish"] ?? 0) + scoreParameter(temp, 25, 32, 30);
+    scores["Catfish"] = (scores["Catfish"] ?? 0) + scoreParameter(ph, 6.5, 8, 20);
+    scores["Catfish"] = (scores["Catfish"] ?? 0) + scoreParameter(salinity, 0, 8, 40);
+    scores["Catfish"] = (scores["Catfish"] ?? 0) + scoreParameter(turbidity, 15, 40, 10);
 
     // Milkfish (Temp 26-32, pH 7-8.5, Salinity 10-35, Turbidity 20-45)
-    if (temp >= 26 && temp <= 32) scores["Milkfish"] = (scores["Milkfish"] ?? 0) + 30;
-    if (ph >= 7 && ph <= 8.5) scores["Milkfish"] = (scores["Milkfish"] ?? 0) + 20;
-    if (salinity >= 10 && salinity <= 35) scores["Milkfish"] = (scores["Milkfish"] ?? 0) + 40;
-    if (turbidity >= 20 && turbidity <= 45) scores["Milkfish"] = (scores["Milkfish"] ?? 0) + 10;
+    scores["Milkfish"] = (scores["Milkfish"] ?? 0) + scoreParameter(temp, 26, 32, 30);
+    scores["Milkfish"] = (scores["Milkfish"] ?? 0) + scoreParameter(ph, 7, 8.5, 20);
+    scores["Milkfish"] = (scores["Milkfish"] ?? 0) + scoreParameter(salinity, 10, 35, 40);
+    scores["Milkfish"] = (scores["Milkfish"] ?? 0) + scoreParameter(turbidity, 20, 45, 10);
 
-    // Convert to list and sort
     List<Map<String, dynamic>> results = [];
     scores.forEach((species, score) {
       String status = "";

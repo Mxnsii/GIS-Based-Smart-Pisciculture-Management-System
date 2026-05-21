@@ -48,17 +48,17 @@ class _FarmerScreenState extends State<FarmerScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: const Color(0xFF0F172A),
         elevation: 0,
         title: const Text(
           'GIS Smart Pisciculture Management',
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         actions: [
           Center(
             child: Text(
               'Welcome, ${widget.farmerName}',
-              style: const TextStyle(color: Colors.black, fontSize: 14),
+              style: const TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w500),
             ),
           ),
           IconButton(
@@ -74,7 +74,7 @@ class _FarmerScreenState extends State<FarmerScreen> {
             },
           ),
           IconButton(
-            icon: const Icon(Icons.logout, color: Colors.black),
+            icon: const Icon(Icons.logout, color: Colors.redAccent),
             onPressed: () {
               Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
                 MaterialPageRoute(
@@ -89,7 +89,7 @@ class _FarmerScreenState extends State<FarmerScreen> {
         bottom: PreferredSize(
             preferredSize: const Size.fromHeight(1.0),
             child: Container(
-              color: Colors.grey.shade300,
+              color: const Color(0xFF1E293B),
               height: 1.0,
             )),
       ),
@@ -143,10 +143,10 @@ class _FarmerScreenState extends State<FarmerScreen> {
         ],
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
-        type: BottomNavigationBarType.shifting,
-        backgroundColor: Colors.white,
-        selectedItemColor: Colors.blue,
-        unselectedItemColor: Colors.grey,
+        type: BottomNavigationBarType.fixed,
+        backgroundColor: const Color(0xFF0F172A),
+        selectedItemColor: Colors.blueAccent,
+        unselectedItemColor: const Color(0xFF64748B),
         elevation: 8,
       ),
     );

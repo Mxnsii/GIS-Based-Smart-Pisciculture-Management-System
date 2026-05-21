@@ -16,27 +16,30 @@ class AppShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFF090D16),
       body: Row(
         children: [
           // ================= SIDEBAR =================
           Container(
             width: 240,
-            color: const Color(0xFF1F2937),
+            color: const Color(0xFF090D16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Padding(
-                  padding: EdgeInsets.all(16),
+                  padding: EdgeInsets.all(20),
                   child: Text(
-                    'Menu',
+                    'AquaSync Menu',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
                     ),
                   ),
                 ),
-                const Divider(color: Colors.white24),
+                const Divider(color: Colors.white12, height: 1),
+                const SizedBox(height: 12),
                 ...menuItems,
               ],
             ),
@@ -51,9 +54,9 @@ class AppShell extends StatelessWidget {
                   height: 60,
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   decoration: const BoxDecoration(
-                    color: Colors.white,
+                    color: Color(0xFF0F172A),
                     border: Border(
-                      bottom: BorderSide(color: Colors.grey),
+                      bottom: BorderSide(color: Color(0xFF1E293B)),
                     ),
                   ),
                   child: Row(
@@ -63,19 +66,20 @@ class AppShell extends StatelessWidget {
                         'GIS Smart Pisciculture Management',
                         style: TextStyle(
                           fontSize: 18,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
                         ),
                       ),
                       Row(
                         children: [
                           Text(
                             'Welcome, $userName',
-                            style: const TextStyle(fontSize: 14),
+                            style: const TextStyle(fontSize: 14, color: Colors.white70, fontWeight: FontWeight.w500),
                           ),
                           const SizedBox(width: 16),
                           TextButton.icon(
-                            icon: const Icon(Icons.logout),
-                            label: const Text('Logout'),
+                            icon: const Icon(Icons.logout, color: Colors.redAccent, size: 18),
+                            label: const Text('Logout', style: TextStyle(color: Colors.redAccent)),
                             onPressed: () {
                               // ✅ Proper logout → LoginScreen
                               Navigator.pushAndRemoveUntil(

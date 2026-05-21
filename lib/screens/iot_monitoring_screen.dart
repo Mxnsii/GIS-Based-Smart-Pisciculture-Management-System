@@ -183,7 +183,7 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
         builder: (BuildContext context) {
           return AlertDialog(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            backgroundColor: Colors.white,
+            backgroundColor: const Color(0xFF0F172A),
             title: Row(
               children: [
                 Icon(Icons.warning_amber_rounded, color: color, size: 32),
@@ -208,7 +208,7 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
                 children: [
                   Text(
                     message,
-                    style: const TextStyle(fontSize: 15, height: 1.4, color: Color(0xFF334155)),
+                    style: const TextStyle(fontSize: 15, height: 1.4, color: Colors.white70),
                   ),
                   const SizedBox(height: 20),
                   const Text(
@@ -216,7 +216,7 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
                     style: TextStyle(
                       fontWeight: FontWeight.bold, 
                       fontSize: 12, 
-                      color: Color(0xFF64748B),
+                      color: Color(0xFF94A3B8),
                       letterSpacing: 1.0,
                     ),
                   ),
@@ -233,7 +233,7 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
                             rec,
                             style: const TextStyle(
                               fontSize: 14, 
-                              color: Color(0xFF1E293B),
+                              color: Colors.white,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -247,7 +247,7 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),
-                child: Text('Close', style: TextStyle(color: Colors.grey.shade600, fontWeight: FontWeight.bold)),
+                child: const Text('Close', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold)),
               ),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
@@ -279,7 +279,7 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: const Color(0xFFF8FAFC),
+      color: const Color(0xFF090D16),
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -288,7 +288,7 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
           const SizedBox(height: 24),
           const Text(
             'IoT Real-time Monitoring',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
           ),
           const SizedBox(height: 16),
           Expanded(
@@ -303,11 +303,11 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
                 }
 
                 if (snapshot.hasError) {
-                  return Center(child: Text("Error: ${snapshot.error}"));
+                  return Center(child: Text("Error: ${snapshot.error}", style: const TextStyle(color: Colors.white)));
                 }
 
                 if (!snapshot.hasData || !snapshot.data!.exists) {
-                  return const Center(child: Text("No sensor data found"));
+                  return const Center(child: Text("No sensor data found", style: TextStyle(color: Colors.white)));
                 }
 
                 final Map<String, dynamic> values =
@@ -328,7 +328,7 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
                       const SizedBox(height: 28),
                       Row(
                         children: [
-                          const Icon(Icons.psychology_outlined, color: Colors.indigo, size: 28),
+                          const Icon(Icons.psychology_outlined, color: Colors.blueAccent, size: 28),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Column(
@@ -339,16 +339,16 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
                                   style: TextStyle(
                                     fontSize: 18, 
                                     fontWeight: FontWeight.w800, 
-                                    color: Color(0xFF1E293B),
+                                    color: Colors.white,
                                     letterSpacing: 0.5,
                                   ),
                                 ),
-                                Text(
+                                const Text(
                                   'Real-time multi-species bio-analytics powered by ML',
                                   style: TextStyle(
                                     fontSize: 11, 
                                     fontWeight: FontWeight.w500, 
-                                    color: Colors.grey.shade600,
+                                    color: Color(0xFF94A3B8),
                                   ),
                                 ),
                               ],
@@ -370,7 +370,7 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
                           }
 
                           if (predSnapshot.hasError) {
-                            return Center(child: Text("AI Stream Error: ${predSnapshot.error}"));
+                            return Center(child: Text("AI Stream Error: ${predSnapshot.error}", style: const TextStyle(color: Colors.white)));
                           }
 
                           final Map<String, dynamic> predData = predSnapshot.hasData && predSnapshot.data!.exists
@@ -432,68 +432,74 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
     final double phVal = data['ph'];
     final double salinityVal = data['salinity'];
 
-    return Card(
-      elevation: 2,
-      shadowColor: Colors.black.withOpacity(0.05),
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 24.0),
-        child: Wrap(
-          alignment: WrapAlignment.spaceBetween,
-          spacing: 12,
-          runSpacing: 16,
-          children: [
-            SizedBox(
-              width: 110,
-              child: SpeedometerGauge(
-                title: 'Turbidity',
-                value: turbidityVal,
-                min: 0,
-                max: 40,
-                unit: ' NTU',
-                gradientColors: const [Colors.red, Colors.green, Colors.green, Colors.yellow, Colors.orange, Colors.red],
-                gradientStops: const [0.0, 0.49, 0.5, 0.75, 0.8125, 1.0],
-              ),
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.indigoAccent.withOpacity(0.25), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.3),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 24.0),
+      child: Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        spacing: 12,
+        runSpacing: 16,
+        children: [
+          SizedBox(
+            width: 110,
+            child: SpeedometerGauge(
+              title: 'Turbidity',
+              value: turbidityVal,
+              min: 0,
+              max: 40,
+              unit: ' NTU',
+              gradientColors: const [Colors.red, Colors.green, Colors.green, Colors.yellow, Colors.orange, Colors.red],
+              gradientStops: const [0.0, 0.49, 0.5, 0.75, 0.8125, 1.0],
             ),
-            SizedBox(
-              width: 110,
-              child: SpeedometerGauge(
-                title: 'Temp',
-                value: tempVal,
-                min: 15,
-                max: 45,
-                unit: '°C',
-                gradientColors: const [Colors.red, Colors.red, Colors.red, Colors.yellow, Colors.green, Colors.green, Colors.yellow, Colors.red],
-                gradientStops: const [0.0, 0.49, 0.5, 0.6, 0.65, 0.78, 0.83, 1.0],
-              ),
+          ),
+          SizedBox(
+            width: 110,
+            child: SpeedometerGauge(
+              title: 'Temp',
+              value: tempVal,
+              min: 15,
+              max: 45,
+              unit: '°C',
+              gradientColors: const [Colors.red, Colors.red, Colors.red, Colors.yellow, Colors.green, Colors.green, Colors.yellow, Colors.red],
+              gradientStops: const [0.0, 0.49, 0.5, 0.6, 0.65, 0.78, 0.83, 1.0],
             ),
-            SizedBox(
-              width: 110,
-              child: SpeedometerGauge(
-                title: 'pH',
-                value: phVal,
-                min: 0,
-                max: 14,
-                unit: '',
-                gradientColors: const [Colors.red, Colors.red, Colors.red, Colors.yellow, Colors.green, Colors.green, Colors.yellow, Colors.red],
-                gradientStops: const [0.0, 0.49, 0.5, 0.675, 0.73, 0.82, 0.875, 1.0],
-              ),
+          ),
+          SizedBox(
+            width: 110,
+            child: SpeedometerGauge(
+              title: 'pH',
+              value: phVal,
+              min: 0,
+              max: 14,
+              unit: '',
+              gradientColors: const [Colors.red, Colors.red, Colors.red, Colors.yellow, Colors.green, Colors.green, Colors.yellow, Colors.red],
+              gradientStops: const [0.0, 0.49, 0.5, 0.675, 0.73, 0.82, 0.875, 1.0],
             ),
-            SizedBox(
-              width: 110,
-              child: SpeedometerGauge(
-                title: 'Salinity',
-                value: salinityVal,
-                min: 0,
-                max: 40,
-                unit: ' ppt',
-                gradientColors: const [Colors.red, Colors.red, Colors.red, Colors.yellow, Colors.green, Colors.green, Colors.yellow, Colors.red],
-                gradientStops: const [0.0, 0.49, 0.5, 0.6, 0.65, 0.78, 0.83, 1.0],
-              ),
+          ),
+          SizedBox(
+            width: 110,
+            child: SpeedometerGauge(
+              title: 'Salinity',
+              value: salinityVal,
+              min: 0,
+              max: 40,
+              unit: ' ppt',
+              gradientColors: const [Colors.red, Colors.green, Colors.green, Colors.yellow, Colors.orange, Colors.red],
+              gradientStops: const [0.0, 0.49, 0.5, 0.75, 0.8125, 1.0],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -512,28 +518,28 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
 
     switch (stressLevel) {
       case 'High Stress':
-        stressBgColor = const Color(0xFFFEF2F2);
-        stressTextColor = const Color(0xFF991B1B);
-        stressBorderColor = const Color(0xFFFCA5A5);
+        stressBgColor = Colors.red.withOpacity(0.15);
+        stressTextColor = Colors.redAccent;
+        stressBorderColor = Colors.redAccent.withOpacity(0.3);
         stressIcon = Icons.error_outline;
         break;
       case 'Moderate Stress':
-        stressBgColor = const Color(0xFFFFF7ED);
-        stressTextColor = const Color(0xFFC2410C);
-        stressBorderColor = const Color(0xFFFED7AA);
+        stressBgColor = Colors.orange.withOpacity(0.15);
+        stressTextColor = Colors.orangeAccent;
+        stressBorderColor = Colors.orangeAccent.withOpacity(0.3);
         stressIcon = Icons.warning_amber_rounded;
         break;
       case 'Mild Stress':
-        stressBgColor = const Color(0xFFFEFCE8);
-        stressTextColor = const Color(0xFF854D0E);
-        stressBorderColor = const Color(0xFFFEF08A);
+        stressBgColor = Colors.amber.withOpacity(0.15);
+        stressTextColor = Colors.amberAccent;
+        stressBorderColor = Colors.amberAccent.withOpacity(0.3);
         stressIcon = Icons.info_outline;
         break;
       case 'Low Stress':
       default:
-        stressBgColor = const Color(0xFFF0FDF4);
-        stressTextColor = const Color(0xFF166534);
-        stressBorderColor = const Color(0xFFBBF7D0);
+        stressBgColor = Colors.teal.withOpacity(0.15);
+        stressTextColor = Colors.tealAccent;
+        stressBorderColor = Colors.tealAccent.withOpacity(0.3);
         stressIcon = Icons.check_circle_outline;
         break;
     }
@@ -547,22 +553,22 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
     if (whiteSpotRisk != null) {
       switch (whiteSpotRisk) {
         case 'Elevated':
-          wsBgColor = const Color(0xFFFEF2F2);
-          wsTextColor = const Color(0xFF991B1B);
-          wsBorderColor = const Color(0xFFFCA5A5);
+          wsBgColor = Colors.red.withOpacity(0.15);
+          wsTextColor = Colors.redAccent;
+          wsBorderColor = Colors.redAccent.withOpacity(0.3);
           wsIcon = Icons.gpp_bad_outlined;
           break;
         case 'Moderate':
-          wsBgColor = const Color(0xFFFFF7ED);
-          wsTextColor = const Color(0xFFC2410C);
-          wsBorderColor = const Color(0xFFFED7AA);
+          wsBgColor = Colors.orange.withOpacity(0.15);
+          wsTextColor = Colors.orangeAccent;
+          wsBorderColor = Colors.orangeAccent.withOpacity(0.3);
           wsIcon = Icons.shield_outlined;
           break;
         case 'Low':
         default:
-          wsBgColor = const Color(0xFFF0FDF4);
-          wsTextColor = const Color(0xFF166534);
-          wsBorderColor = const Color(0xFFBBF7D0);
+          wsBgColor = Colors.teal.withOpacity(0.15);
+          wsTextColor = Colors.tealAccent;
+          wsBorderColor = Colors.tealAccent.withOpacity(0.3);
           wsIcon = Icons.verified_user_outlined;
           break;
       }
@@ -579,126 +585,100 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
       speciesDescription = 'Finfish Species';
     }
 
-    return Card(
-      elevation: 2,
-      shadowColor: Colors.black.withOpacity(0.04),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: Colors.grey.shade200),
-      ),
+    return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      child: ExpansionTile(
-        key: PageStorageKey<String>(species),
-        leading: Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: Colors.indigo.shade50,
-            borderRadius: BorderRadius.circular(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
           ),
-          child: Icon(speciesIcon, color: Colors.indigo, size: 24),
-        ),
-        title: Text(
-          species,
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-            color: Color(0xFF1E293B),
-          ),
-        ),
-        subtitle: Text(
-          speciesDescription,
-          style: TextStyle(
-            color: Colors.grey.shade500,
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
+        ],
+      ),
+      child: Theme(
+        data: Theme.of(context).copyWith(
+          dividerColor: Colors.transparent,
+          unselectedWidgetColor: Colors.white70,
+          colorScheme: Theme.of(context).colorScheme.copyWith(
+            primary: Colors.blueAccent,
           ),
         ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              icon: const Icon(Icons.info_outline, color: Colors.indigo),
-              tooltip: 'View Safe Ranges',
-              onPressed: () => _showSafeRangeInfo(context, species),
+        child: ExpansionTile(
+          key: PageStorageKey<String>(species),
+          leading: Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.blueAccent.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(12),
             ),
-            const Icon(Icons.expand_more),
-          ],
-        ),
-        initiallyExpanded: species.contains('Shrimp'), // Expand shrimp species by default since they have white spot risk!
-        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        expandedCrossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Divider(height: 16),
-          const SizedBox(height: 8),
-          
-          // Stress level title and badge
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Icon(speciesIcon, color: Colors.blueAccent, size: 24),
+          ),
+          title: Text(
+            species,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+              color: Colors.white,
+            ),
+          ),
+          subtitle: Text(
+            speciesDescription,
+            style: const TextStyle(
+              color: Color(0xFF94A3B8),
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
-                'Environmental Stress',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF475569),
-                  fontSize: 14,
-                ),
+              IconButton(
+                icon: const Icon(Icons.info_outline, color: Colors.blueAccent),
+                tooltip: 'View Safe Ranges',
+                onPressed: () => _showSafeRangeInfo(context, species),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: stressBgColor,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: stressBorderColor),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(stressIcon, color: stressTextColor, size: 14),
-                    const SizedBox(width: 4),
-                    Text(
-                      stressLevel,
-                      style: TextStyle(
-                        color: stressTextColor,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              const Icon(Icons.expand_more, color: Colors.white70),
             ],
           ),
-          
-          if (whiteSpotRisk != null) ...[
-            const SizedBox(height: 12),
-            // White spot risk title and badge
+          initiallyExpanded: species.contains('Shrimp'), // Expand shrimp species by default since they have white spot risk!
+          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          expandedCrossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Divider(height: 16, color: Colors.white12),
+            const SizedBox(height: 8),
+            
+            // Stress level title and badge
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text(
-                  'White Spot Disease Risk',
+                  'Environmental Stress',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF475569),
+                    color: Color(0xFF94A3B8),
                     fontSize: 14,
                   ),
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
-                    color: wsBgColor,
+                    color: stressBgColor,
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: wsBorderColor!),
+                    border: Border.all(color: stressBorderColor),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(wsIcon, color: wsTextColor, size: 14),
+                      Icon(stressIcon, color: stressTextColor, size: 14),
                       const SizedBox(width: 4),
                       Text(
-                        '$whiteSpotRisk Risk',
+                        stressLevel,
                         style: TextStyle(
-                          color: wsTextColor,
+                          color: stressTextColor,
                           fontWeight: FontWeight.bold,
                           fontSize: 12,
                         ),
@@ -708,34 +688,75 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
                 ),
               ],
             ),
-          ],
-          
-          const SizedBox(height: 12),
-          // Interactive Action Button
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              icon: const Icon(Icons.lightbulb_outline, size: 16),
-              label: const Text('View Species Guidelines'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.indigo,
-                side: BorderSide(color: Colors.indigo.shade100),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                padding: const EdgeInsets.symmetric(vertical: 10),
+            
+            if (whiteSpotRisk != null) ...[
+              const SizedBox(height: 12),
+              // White spot risk title and badge
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'White Spot Disease Risk',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF94A3B8),
+                      fontSize: 14,
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: wsBgColor,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: wsBorderColor!),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(wsIcon, color: wsTextColor, size: 14),
+                        const SizedBox(width: 4),
+                        Text(
+                          '$whiteSpotRisk Risk',
+                          style: TextStyle(
+                            color: wsTextColor,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-              onPressed: () {
-                final recs = _getStressRecommendations(species);
-                _showAlertDialog(
-                  context: context,
-                  title: '$species Guidelines',
-                  message: 'Here are the recommended biosecurity and maintenance steps for $species based on current water parameters:',
-                  recommendations: recs,
-                  color: Colors.indigo,
-                );
-              },
+            ],
+            
+            const SizedBox(height: 12),
+            // Interactive Action Button
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.lightbulb_outline, size: 16),
+                label: const Text('View Species Guidelines'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.blueAccent,
+                  side: BorderSide(color: Colors.blueAccent.withOpacity(0.4)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                ),
+                onPressed: () {
+                  final recs = _getStressRecommendations(species);
+                  _showAlertDialog(
+                    context: context,
+                    title: '$species Guidelines',
+                    message: 'Here are the recommended biosecurity and maintenance steps for $species based on current water parameters:',
+                    recommendations: recs,
+                    color: Colors.blueAccent,
+                  );
+                },
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -748,10 +769,10 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
       builder: (context) {
         return AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          backgroundColor: Colors.white,
+          backgroundColor: const Color(0xFF0F172A),
           title: Row(
             children: [
-              const Icon(Icons.check_circle_outline, color: Colors.green, size: 28),
+              const Icon(Icons.check_circle_outline, color: Colors.tealAccent, size: 28),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -761,6 +782,7 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
                     fontWeight: FontWeight.bold,
                     letterSpacing: 0.5,
                     height: 1.2,
+                    color: Colors.white,
                   ),
                 ),
               ),
@@ -775,36 +797,69 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
                   1: FlexColumnWidth(1),
                 },
                 children: [
-                  TableRow(
+                  const TableRow(
                     decoration: BoxDecoration(
-                      border: Border(bottom: BorderSide(color: Colors.grey.shade200, width: 1.5)),
+                      border: Border(bottom: BorderSide(color: Colors.white12, width: 1.5)),
                     ),
                     children: [
                       Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8.0),
+                        padding: EdgeInsets.symmetric(vertical: 8.0),
                         child: Text(
                           'Parameter',
-                          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey.shade600, fontSize: 13),
+                          style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF94A3B8), fontSize: 13),
                         ),
                       ),
                       Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8.0),
+                        padding: EdgeInsets.symmetric(vertical: 8.0),
                         child: Text(
                           'Ideal Range',
-                          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey.shade600, fontSize: 13),
+                          style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF94A3B8), fontSize: 13),
                         ),
                       ),
                     ],
                   ),
                   TableRow(
+                    decoration: const BoxDecoration(
+                      border: Border(bottom: BorderSide(color: Colors.white10, width: 1)),
+                    ),
                     children: [
                       const Padding(
                         padding: EdgeInsets.symmetric(vertical: 10.0),
-                        child: Text('Temperature', style: TextStyle(fontSize: 14)),
+                        child: Text('Temperature', style: TextStyle(fontSize: 14, color: Colors.white70)),
                       ),
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 10.0),
-                        child: Text(ranges['temp']!, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                        child: Text(ranges['temp']!, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
+                      ),
+                    ],
+                  ),
+                  TableRow(
+                    decoration: const BoxDecoration(
+                      border: Border(bottom: BorderSide(color: Colors.white10, width: 1)),
+                    ),
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 10.0),
+                        child: Text('pH', style: TextStyle(fontSize: 14, color: Colors.white70)),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 10.0),
+                        child: Text(ranges['ph']!, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
+                      ),
+                    ],
+                  ),
+                  TableRow(
+                    decoration: const BoxDecoration(
+                      border: Border(bottom: BorderSide(color: Colors.white10, width: 1)),
+                    ),
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 10.0),
+                        child: Text('Turbidity', style: TextStyle(fontSize: 14, color: Colors.white70)),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 10.0),
+                        child: Text(ranges['turbidity']!, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
                       ),
                     ],
                   ),
@@ -812,35 +867,11 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
                     children: [
                       const Padding(
                         padding: EdgeInsets.symmetric(vertical: 10.0),
-                        child: Text('pH', style: TextStyle(fontSize: 14)),
+                        child: Text('Salinity', style: TextStyle(fontSize: 14, color: Colors.white70)),
                       ),
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 10.0),
-                        child: Text(ranges['ph']!, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                      ),
-                    ],
-                  ),
-                  TableRow(
-                    children: [
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 10.0),
-                        child: Text('Turbidity', style: TextStyle(fontSize: 14)),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 10.0),
-                        child: Text(ranges['turbidity']!, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                      ),
-                    ],
-                  ),
-                  TableRow(
-                    children: [
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 10.0),
-                        child: Text('Salinity', style: TextStyle(fontSize: 14)),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 10.0),
-                        child: Text(ranges['salinity']!, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                        child: Text(ranges['salinity']!, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
                       ),
                     ],
                   ),
@@ -851,7 +882,7 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Close', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo)),
+              child: const Text('Close', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blueAccent)),
             ),
           ],
         );
@@ -905,12 +936,12 @@ class SpeedometerGauge extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               '${value.toStringAsFixed(1)}$unit',
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
             ),
             Text(
               title,
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
+              style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
             ),
           ],
         );
@@ -953,7 +984,7 @@ class _SpeedometerPainter extends CustomPainter {
 
     // Background track (so we see the full semi-circle clearly)
     Paint bgTrackPaint = Paint()
-      ..color = Colors.grey.shade200
+      ..color = const Color(0xFF0F172A)
       ..strokeWidth = 10
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
@@ -968,7 +999,7 @@ class _SpeedometerPainter extends CustomPainter {
     double needleAngle = math.pi + sweepAngle;
     
     Paint needlePaint = Paint()
-      ..color = Colors.blueGrey.shade900
+      ..color = Colors.white
       ..strokeWidth = 3
       ..strokeCap = StrokeCap.round;
 
@@ -980,9 +1011,9 @@ class _SpeedometerPainter extends CustomPainter {
     canvas.drawLine(center, needleTip, needlePaint);
 
     // Draw center pivot
-    Paint pivotPaint = Paint()..color = Colors.blueGrey.shade900;
+    Paint pivotPaint = Paint()..color = Colors.white;
     canvas.drawCircle(center, 5, pivotPaint);
-    Paint innerPivotPaint = Paint()..color = Colors.white;
+    Paint innerPivotPaint = Paint()..color = Colors.indigoAccent;
     canvas.drawCircle(center, 2, innerPivotPaint);
   }
 

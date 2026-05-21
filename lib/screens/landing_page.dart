@@ -74,8 +74,8 @@ class _LandingPageState extends State<LandingPage> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFF2563EB), // Vibrant blue
-              Color(0xFF1E3A8A), // Deep blue
+              Color(0xFF0F172A), // Slate navy
+              Color(0xFF020617), // Space black
             ],
           ),
         ),
@@ -104,7 +104,7 @@ class _LandingPageState extends State<LandingPage> {
                         );
                       },
                     ),
-                    // Subtle dark overlay to blend the bottom edge nicely
+                    // Elegant dark slate overlay to fade the image bottom into the space background
                     Positioned.fill(
                       child: Container(
                         decoration: BoxDecoration(
@@ -113,8 +113,10 @@ class _LandingPageState extends State<LandingPage> {
                             end: Alignment.bottomCenter,
                             colors: [
                               Colors.transparent,
-                              Colors.black.withOpacity(0.5),
+                              const Color(0xFF090D16).withOpacity(0.4),
+                              const Color(0xFF020617),
                             ],
+                            stops: const [0.0, 0.6, 1.0],
                           ),
                         ),
                       ),

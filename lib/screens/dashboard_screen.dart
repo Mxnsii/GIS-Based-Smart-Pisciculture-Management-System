@@ -44,12 +44,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFF090D16),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: const Color(0xFF0F172A),
         elevation: 0,
         title: const Text(
           'GIS Smart Pisciculture Management',
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         automaticallyImplyLeading: false,
         leading: _selectedIndex != 0
@@ -64,11 +65,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Center(
             child: Text(
               'Welcome, ${widget.userName}',
-              style: const TextStyle(color: Colors.black, fontSize: 14),
+              style: const TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w500),
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.logout, color: Colors.black),
+            icon: const Icon(Icons.logout, color: Colors.redAccent),
             onPressed: () {
               Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
                 MaterialPageRoute(
@@ -83,7 +84,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         bottom: PreferredSize(
             preferredSize: const Size.fromHeight(1.0),
             child: Container(
-              color: Colors.grey.shade300,
+              color: const Color(0xFF1E293B),
               height: 1.0,
             )),
       ),
@@ -116,16 +117,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
             label: 'Farm Registry',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.warning, color: Colors.orange),
+            icon: Icon(Icons.warning, color: Colors.orangeAccent),
             label: 'Complaints',
           ),
         ],
         currentIndex: _selectedIndex,
-        selectedItemColor: Colors.blue,
-        unselectedItemColor: Colors.grey,
+        selectedItemColor: Colors.blueAccent,
+        unselectedItemColor: const Color(0xFF64748B),
         onTap: _onItemTapped,
         type: BottomNavigationBarType.fixed,
-        backgroundColor: Colors.white,
+        backgroundColor: const Color(0xFF0F172A),
         elevation: 8,
       ),
     );
@@ -149,73 +150,73 @@ class DashboardHomeView extends StatelessWidget {
         Expanded(
           child: SingleChildScrollView(
             child: Container(
-              color: const Color(0xFFF8FAFC), // Light grey background
-              padding: const EdgeInsets.all(16),
+              color: const Color(0xFF090D16), // Slate black background
+              padding: const EdgeInsets.all(24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
                     'Authority Dashboard',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 16),
-          const WeatherWidget(), // Add Weather Widget
-          const SizedBox(height: 24),
-          Row(
-            children: [
-              _buildStatCard(
-                title: 'Total Registered Farms',
-                valueWidget: const Text(
-                  '4',
-                  style: TextStyle(color: Colors.blue, fontSize: 32, fontWeight: FontWeight.bold),
-                ),
-                color: Colors.blue,
-                onTap: () => onTabChange(2), // Index 2: Farm Registry
-              ),
-              const SizedBox(width: 24),
-              _buildStatCard(
-                title: 'Farms in CRZ (Mock)',
-                valueWidget: const Text(
-                  '8',
-                  style: TextStyle(color: Colors.red, fontSize: 32, fontWeight: FontWeight.bold),
-                ),
-                color: Colors.red,
-                onTap: () => onTabChange(1), // Index 1: GIS Map
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          Row(
-            children: [
-              _buildStatCard(
-                title: 'Total Complaints',
-                valueWidget: StreamBuilder<QuerySnapshot>(
-                  stream: FirebaseFirestore.instance.collection('complaints').snapshots(),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const SizedBox(
-                        height: 32,
-                        width: 32,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      );
-                    }
-                    if (snapshot.hasError) {
-                      return const Text('Error', style: TextStyle(color: Colors.red, fontSize: 16));
-                    }
-                    final count = snapshot.data?.docs.length ?? 0;
-                    return Text(
-                      '$count',
-                      style: const TextStyle(color: Colors.orange, fontSize: 32, fontWeight: FontWeight.bold),
-                    );
-                  },
-                ),
-                color: Colors.orange,
-                onTap: () => onTabChange(3), // Index 3: Authority Complaints Screen
-              ),
-              const SizedBox(width: 24),
-              Expanded(child: Container()), // Empty placeholder to keep card sizing consistent
-            ],
-          ),
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 0.5),
+                  ),
+                  const SizedBox(height: 20),
+                  const WeatherWidget(), // Add Weather Widget
+                  const SizedBox(height: 28),
+                  Row(
+                    children: [
+                      _buildStatCard(
+                        title: 'TOTAL REGISTERED FARMS',
+                        valueWidget: const Text(
+                          '4',
+                          style: TextStyle(color: Colors.blueAccent, fontSize: 32, fontWeight: FontWeight.bold),
+                        ),
+                        color: Colors.blueAccent,
+                        onTap: () => onTabChange(2), // Index 2: Farm Registry
+                      ),
+                      const SizedBox(width: 24),
+                      _buildStatCard(
+                        title: 'FARMS IN CRZ ZONE (MOCK)',
+                        valueWidget: const Text(
+                          '8',
+                          style: TextStyle(color: Colors.redAccent, fontSize: 32, fontWeight: FontWeight.bold),
+                        ),
+                        color: Colors.redAccent,
+                        onTap: () => onTabChange(1), // Index 1: GIS Map
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      _buildStatCard(
+                        title: 'ACTIVE COMPLAINTS',
+                        valueWidget: StreamBuilder<QuerySnapshot>(
+                          stream: FirebaseFirestore.instance.collection('complaints').snapshots(),
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState == ConnectionState.waiting) {
+                              return const SizedBox(
+                                height: 32,
+                                width: 32,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              );
+                            }
+                            if (snapshot.hasError) {
+                              return const Text('Error', style: TextStyle(color: Colors.red, fontSize: 16));
+                            }
+                            final count = snapshot.data?.docs.length ?? 0;
+                            return Text(
+                              '$count',
+                              style: const TextStyle(color: Colors.orangeAccent, fontSize: 32, fontWeight: FontWeight.bold),
+                            );
+                          },
+                        ),
+                        color: Colors.orangeAccent,
+                        onTap: () => onTabChange(3), // Index 3: Authority Complaints Screen
+                      ),
+                      const SizedBox(width: 24),
+                      Expanded(child: Container()), // Empty placeholder to keep card sizing consistent
+                    ],
+                  ),
                   const SizedBox(height: 32),
                   const _AnimatedFishFooter(),
                 ],
@@ -231,17 +232,18 @@ class DashboardHomeView extends StatelessWidget {
     return Expanded(
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         child: Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
+            color: const Color(0xFF1E293B),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: color.withOpacity(0.35), width: 1.5),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
+                color: color.withOpacity(0.06),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
               ),
             ],
           ),
@@ -250,10 +252,11 @@ class DashboardHomeView extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: TextStyle(
-                  color: Colors.grey.shade600,
-                  fontSize: 14,
+                style: const TextStyle(
+                  color: Color(0xFF94A3B8),
+                  fontSize: 12,
                   fontWeight: FontWeight.bold,
+                  letterSpacing: 0.8,
                 ),
               ),
               const SizedBox(height: 12),
@@ -355,14 +358,17 @@ class __AnimatedFishFooterState extends State<_AnimatedFishFooter> with SingleTi
     return Container(
       height: 100, // Fixed footer height
       width: double.infinity,
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.indigoAccent.withOpacity(0.2), width: 1.5),
+        gradient: const LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xFF5AB9EA), Color(0xFF1E88E5)], // Nice ocean blue
+          colors: [Color(0xFF0F172A), Color(0xFF090D16)], // Slate Navy to Slate Black
         ),
       ),
-      child: ClipRect(
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
         child: Stack(
           children: [
             // Background Wave 1
@@ -421,7 +427,7 @@ class __AnimatedFishFooterState extends State<_AnimatedFishFooter> with SingleTi
             // Minimalist sandy bottom overlay (no text)
             Positioned(
               left: 0, right: 0, bottom: 0, height: 12,
-              child: Container(color: const Color(0xFF0D47A1).withOpacity(0.5)),
+              child: Container(color: const Color(0xFF1E293B).withOpacity(0.5)),
             ),
           ],
         ),
@@ -440,7 +446,7 @@ class _WavePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.white
+      ..color = Colors.indigoAccent.withOpacity(0.15)
       ..style = PaintingStyle.fill;
     final path = Path();
     path.moveTo(0, size.height * 0.4);

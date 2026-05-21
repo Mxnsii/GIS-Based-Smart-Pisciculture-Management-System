@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'screens/login_screen.dart';
 import 'screens/landing_page.dart';
 import 'theme/app_theme.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -8,8 +7,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'services/notification_service.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 
 @pragma('vm:entry-point')
@@ -65,11 +62,17 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'AgriConnect',
-      theme: AppTheme.lightTheme.copyWith(
+      theme: AppTheme.darkTheme.copyWith(
         textTheme: GoogleFonts.latoTextTheme(
-          Theme.of(context).textTheme,
+          ThemeData.dark().textTheme,
         ),
       ),
+      darkTheme: AppTheme.darkTheme.copyWith(
+        textTheme: GoogleFonts.latoTextTheme(
+          ThemeData.dark().textTheme,
+        ),
+      ),
+      themeMode: ThemeMode.dark,
       home: const LandingPage(),
       debugShowCheckedModeBanner: false,
     );
