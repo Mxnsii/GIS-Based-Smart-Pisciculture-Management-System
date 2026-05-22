@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'gis_map_view.dart';
 import '../widgets/custom_back_button.dart';
+import '../widgets/glass_card.dart';
 
 class FarmDetailsScreen extends StatefulWidget {
   final Map<String, dynamic> farmData;
@@ -18,6 +19,7 @@ class FarmDetailsScreen extends StatefulWidget {
 class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
   String _selectedMetric = 'Temperature'; // Default metric
   final List<String> _metrics = ['Temperature', 'pH', 'Turbidity', 'Salinity'];
+
   @override
   Widget build(BuildContext context) {
     final String status = (widget.farmData['status'] ?? '').toString();
@@ -28,10 +30,13 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
     // show a restricted screen (users should not see the farm details).
     if (!widget.isAuthority && isInactive) {
       return Scaffold(
+        backgroundColor: const Color(0xFF090D16), // Premium dark mode background
         appBar: AppBar(
-          title: const Text('Farm Details'),
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.black,
+          title: const Text(
+            'Farm Details',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+          backgroundColor: const Color(0xFF0F172A),
           elevation: 0,
           automaticallyImplyLeading: false,
           leading: CustomBackButton(
@@ -41,28 +46,44 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: const [
-                Icon(Icons.block, size: 72, color: Colors.grey),
-                SizedBox(height: 16),
-                Text(
-                  'This farm is currently inactive. Details are restricted.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 16, color: Colors.black54),
-                ),
-              ],
+            child: GlassCard(
+              borderRadius: 20,
+              blur: 15,
+              backgroundColor: const Color(0xFF1E293B).withOpacity(0.4),
+              borderColor: Colors.redAccent.withOpacity(0.2),
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: const [
+                  Icon(Icons.block, size: 72, color: Colors.redAccent),
+                  SizedBox(height: 20),
+                  Text(
+                    'Access Restricted',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
+                  SizedBox(height: 12),
+                  Text(
+                    'This farm is currently inactive. Details are restricted to authorized personnel only.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 14, color: Color(0xFF94A3B8), height: 1.5),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
       );
     }
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF1F5F9), // Slate 100
+      backgroundColor: const Color(0xFF090D16), // Premium dark mode background
       appBar: AppBar(
-        title: Text(widget.farmData['name'] ?? 'Farm Details'),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
+        title: Text(
+          widget.farmData['name'] ?? 'Farm Details',
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+        ),
+        backgroundColor: const Color(0xFF0F172A),
         elevation: 0,
         centerTitle: true,
         automaticallyImplyLeading: false,
@@ -70,6 +91,13 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         leadingWidth: 80,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1.0),
+          child: Container(
+            color: Colors.white.withOpacity(0.08),
+            height: 1.0,
+          ),
+        ),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
@@ -77,40 +105,39 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildHeaderCard(),
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
             _buildSectionTitle('📍 GIS & Location'),
             _buildGisSection(context),
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
             // Updated Section Title
-            _buildSectionTitle('📈 Insights'),
+            _buildSectionTitle('📈 Real-Time Diagnostics'),
             _buildInsightsSection(), // Replaces _buildWaterQualitySection
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
 
-            // Conditionally show extended sections. The product requested
-            // removal of several sections for Active, Pending Approval, and Rejected.
+            // Conditionally show extended sections.
             if (!hideSections) ...[
-              _buildSectionTitle('🐠 Fish Stock'),
+              _buildSectionTitle('🐠 Fish Stock Details'),
               _buildStockSection(),
-              const SizedBox(height: 16),
-              _buildSectionTitle('⚠️ Risk & Alerts'),
+              const SizedBox(height: 24),
+              _buildSectionTitle('⚠️ Biosecurity Risk & Alerts'),
               _buildRiskSection(),
-              const SizedBox(height: 16),
+              const SizedBox(height: 24),
               _buildSectionTitle('💰 Financials & Operations'),
               _buildFinancialSection(),
-              const SizedBox(height: 16),
+              const SizedBox(height: 24),
             ],
 
             // Documents should be shown in all cases but with certain sensitive
             // entries removed for Active/Pending/Rejected as requested.
-            _buildSectionTitle('📑 Documents'),
+            _buildSectionTitle('📑 Documentation & Verification'),
             _buildDocumentsSection(excludeSensitive: hideSections),
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
 
             if (!hideSections) ...[
               _buildSectionTitle('📊 Performance Analytics'),
               _buildAnalyticsSection(),
-              const SizedBox(height: 16),
-              _buildSectionTitle('🔐 Approval Workflow'),
+              const SizedBox(height: 24),
+              _buildSectionTitle('🔐 Compliance & Approvals'),
               _buildWorkflowSection(),
             ],
             const SizedBox(height: 32),
@@ -122,33 +149,44 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
 
   Widget _buildSectionTitle(String title) {
     return Padding(
-      padding: const EdgeInsets.only(left: 4, bottom: 8),
-      child: Text(
-        title,
-        style: const TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-          color: Color(0xFF0F172A), // Slate 900
-        ),
+      padding: const EdgeInsets.only(left: 4, bottom: 12),
+      child: Row(
+        children: [
+          Container(
+            width: 4,
+            height: 18,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF06B6D4), Color(0xFF6366F1)],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildCard({required Widget child, Color? color}) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: color ?? Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+    return GlassCard(
+      borderRadius: 16.0,
+      blur: 12.0,
+      backgroundColor: color ?? const Color(0xFF1E293B).withOpacity(0.45),
+      borderColor: Colors.white.withOpacity(0.08),
+      padding: const EdgeInsets.all(18),
+      margin: const EdgeInsets.only(bottom: 4),
       child: child,
     );
   }
@@ -160,25 +198,44 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Farm ID: ${widget.farmData['id'] ?? 'N/A'}',
-                    style: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    widget.farmData['owner'] ?? 'Unknown Owner',
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Farm ID: ${widget.farmData['id'] ?? 'N/A'}',
+                      style: const TextStyle(
+                        color: Color(0xFF06B6D4), 
+                        fontWeight: FontWeight.bold, 
+                        fontSize: 12,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      widget.farmData['owner'] ?? 'Unknown Owner',
+                      style: const TextStyle(
+                        fontSize: 22, 
+                        fontWeight: FontWeight.bold, 
+                        color: Colors.white,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               _buildStatusBadge(widget.farmData['status'] ?? 'Unknown'),
             ],
           ),
-          const Divider(height: 24),
+          const SizedBox(height: 16),
+          Container(
+            height: 1,
+            color: Colors.white.withOpacity(0.08),
+          ),
+          const SizedBox(height: 16),
           _buildInfoRow(Icons.phone, widget.farmData['contact'] ?? 'N/A'),
           _buildInfoRow(Icons.email, widget.farmData['email'] ?? 'N/A'),
           Builder(
@@ -207,19 +264,25 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
     return _buildCard(
       child: Column(
         children: [
-           Row(
+          Row(
             children: [
               Expanded(
-                child: Column(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
                     _buildDetailItem('Latitude', '${widget.farmData['lat'] ?? 0.0}'),
+                    Container(
+                      width: 1,
+                      height: 32,
+                      color: Colors.white.withOpacity(0.08),
+                    ),
                     _buildDetailItem('Longitude', '${widget.farmData['lng'] ?? 0.0}'),
                   ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 18),
           // If farm is inactive we do not show extension navigation (e.g. map)
           finalStatusMapButton(context),
         ],
@@ -234,31 +297,49 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
       return const SizedBox.shrink();
     }
 
-    return SizedBox(
+    return Container(
       width: double.infinity,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF6366F1), Color(0xFF4F46E5)],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF6366F1).withOpacity(0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       child: ElevatedButton.icon(
         onPressed: () {
           if (widget.farmData['lat'] != null && widget.farmData['lng'] != null) {
             Navigator.push(
               context,
               MaterialPageRoute(
-                    builder: (_) => GisMapView(
-                          initialLat: widget.farmData['lat'] is String ? double.tryParse(widget.farmData['lat']) : widget.farmData['lat'].toDouble(),
-                          initialLng: widget.farmData['lng'] is String ? double.tryParse(widget.farmData['lng']) : widget.farmData['lng'].toDouble(),
-                          initialZoom: 16,
-                          isAuthority: widget.isAuthority,
-                          farms: [widget.farmData],
-                        ),
+                builder: (_) => GisMapView(
+                  initialLat: widget.farmData['lat'] is String ? double.tryParse(widget.farmData['lat']) : widget.farmData['lat'].toDouble(),
+                  initialLng: widget.farmData['lng'] is String ? double.tryParse(widget.farmData['lng']) : widget.farmData['lng'].toDouble(),
+                  initialZoom: 16,
+                  isAuthority: widget.isAuthority,
+                  farms: [widget.farmData],
+                ),
               ),
             );
           }
         },
-        icon: const Icon(Icons.map),
-        label: const Text('View on GIS Map'),
+        icon: const Icon(Icons.map, size: 18),
+        label: const Text(
+          'View on GIS Map',
+          style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5),
+        ),
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.blue.shade700,
+          backgroundColor: Colors.transparent,
           foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 12),
+          shadowColor: Colors.transparent,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       ),
     );
@@ -279,26 +360,27 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-           Row(
+          Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-               const Text(
+              const Text(
                 'Real-time Trends',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
               ),
               // Metric Selector Dropdown
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey.shade300),
+                  color: const Color(0xFF0F172A),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.white.withOpacity(0.08)),
                 ),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<String>(
+                    dropdownColor: const Color(0xFF0F172A),
                     value: _selectedMetric,
                     isDense: true,
-                    icon: const Icon(Icons.arrow_drop_down, size: 20),
+                    icon: const Icon(Icons.arrow_drop_down, size: 20, color: Color(0xFF06B6D4)),
                     onChanged: (String? value) {
                       if (value != null) {
                         setState(() {
@@ -309,7 +391,10 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
                     items: _metrics.map<DropdownMenuItem<String>>((String value) {
                       return DropdownMenuItem<String>(
                         value: value,
-                        child: Text(value, style: const TextStyle(fontSize: 14)),
+                        child: Text(
+                          value, 
+                          style: const TextStyle(fontSize: 13, color: Colors.white, fontWeight: FontWeight.w500),
+                        ),
                       );
                     }).toList(),
                   ),
@@ -317,21 +402,21 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           Center(
             child: Text(
               '${_selectedMetric.toUpperCase()} ${_getMetricUnit().isNotEmpty ? '(${_getMetricUnit()})' : ''}',
-              style: TextStyle(
-                fontSize: 18, 
+              style: const TextStyle(
+                fontSize: 14, 
                 fontWeight: FontWeight.bold, 
-                letterSpacing: 1.2,
-                color: Colors.grey.shade800,
+                letterSpacing: 1.5,
+                color: Color(0xFF94A3B8),
               ),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           AspectRatio(
-            aspectRatio: 2.5, // Wider aspect ratio for better detail
+            aspectRatio: 2.2, // Wider aspect ratio for better detail
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('water_parameters')
@@ -340,15 +425,15 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const Center(child: CircularProgressIndicator(color: Color(0xFF06B6D4)));
                 }
 
                 if (snapshot.hasError) {
-                  return Center(child: Text('Error: ${snapshot.error}'));
+                  return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.redAccent)));
                 }
 
                 if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return const Center(child: Text('No data available'));
+                  return const Center(child: Text('No data available', style: TextStyle(color: Color(0xFF94A3B8))));
                 }
 
                 // 1. Process Data
@@ -370,9 +455,9 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
                     DateTime? date;
                     if (data['timestamp'] != null) {
                       if (data['timestamp'] is Timestamp) {
-                         date = (data['timestamp'] as Timestamp).toDate();
+                        date = (data['timestamp'] as Timestamp).toDate();
                       } else if (data['timestamp'] is String) {
-                         date = DateTime.tryParse(data['timestamp']);
+                        date = DateTime.tryParse(data['timestamp']);
                       }
                     }
                     chartData.add({
@@ -383,13 +468,13 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
                 }
 
                 if (chartData.isEmpty) {
-                   return const Center(child: Text('No valid data for selected metric'));
+                  return const Center(child: Text('No valid data for selected metric', style: TextStyle(color: Color(0xFF94A3B8))));
                 }
 
                 // 2. Prepare Spots and Min/Max
                 List<FlSpot> spots = [];
                 for (int i = 0; i < chartData.length; i++) {
-                   spots.add(FlSpot(i.toDouble(), chartData[i]['value']));
+                  spots.add(FlSpot(i.toDouble(), chartData[i]['value']));
                 }
 
                 double minY = spots.map((e) => e.y).reduce((a, b) => a < b ? a : b);
@@ -403,146 +488,157 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
 
                 // Color Setup
                 Color primaryColor = _getMetricColor();
-                List<Color> gradientColors = [
-                  primaryColor,
-                  primaryColor.withOpacity(0.5),
-                ];
 
-                return LineChart(
-                  LineChartData(
-                    gridData: FlGridData(
-                      show: true,
-                      drawVerticalLine: false,
-                      horizontalInterval: yRange / 5, // Approx 5 lines
-                      getDrawingHorizontalLine: (value) {
-                        return FlLine(
-                          color: Colors.grey.shade200,
-                          strokeWidth: 1,
-                        );
-                      },
-                    ),
-                    titlesData: FlTitlesData(
-                      show: true,
-                      rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                      topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                      bottomTitles: AxisTitles(
-                        sideTitles: SideTitles(
-                          showTitles: true,
-                          reservedSize: 30,
-                          interval: (spots.length / 5).ceilToDouble(), // Dynamic interval
-                          getTitlesWidget: (value, meta) {
-                            int index = value.toInt();
-                            if (index >= 0 && index < chartData.length) {
-                              DateTime date = chartData[index]['date'];
-                              return Padding(
-                                padding: const EdgeInsets.only(top: 8.0),
-                                child: Text(
-                                  DateFormat('MM/dd').format(date), // e.g. 10/24
-                                  style: TextStyle(
-                                    color: Colors.grey.shade600,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 10,
+                return TweenAnimationBuilder<double>(
+                  tween: Tween<double>(begin: 0.0, end: 1.0),
+                  duration: const Duration(milliseconds: 800),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, animValue, child) {
+                    return Opacity(
+                      opacity: animValue,
+                      child: Transform.translate(
+                        offset: Offset(0, (1 - animValue) * 15),
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: LineChart(
+                    LineChartData(
+                      gridData: FlGridData(
+                        show: true,
+                        drawVerticalLine: false,
+                        horizontalInterval: yRange / 5, // Approx 5 lines
+                        getDrawingHorizontalLine: (value) {
+                          return FlLine(
+                            color: Colors.white.withOpacity(0.04),
+                            strokeWidth: 1,
+                          );
+                        },
+                      ),
+                      titlesData: FlTitlesData(
+                        show: true,
+                        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        bottomTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize: 30,
+                            interval: (spots.length / 5).ceilToDouble(), // Dynamic interval
+                            getTitlesWidget: (value, meta) {
+                              int index = value.toInt();
+                              if (index >= 0 && index < chartData.length) {
+                                DateTime date = chartData[index]['date'];
+                                return Padding(
+                                  padding: const EdgeInsets.only(top: 8.0),
+                                  child: Text(
+                                    DateFormat('MM/dd').format(date), // e.g. 10/24
+                                    style: const TextStyle(
+                                      color: Color(0xFF64748B),
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 9,
+                                    ),
                                   ),
+                                );
+                              }
+                              return const SizedBox.shrink();
+                            },
+                          ),
+                        ),
+                        leftTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            interval: yRange / 5, // Match grid
+                            getTitlesWidget: (value, meta) {
+                              return Text(
+                                value.toStringAsFixed(1),
+                                style: const TextStyle(
+                                  color: Color(0xFF64748B),
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w500,
                                 ),
+                                textAlign: TextAlign.left,
                               );
-                            }
-                            return const SizedBox.shrink();
-                          },
-                        ),
-                      ),
-                      leftTitles: AxisTitles(
-                        sideTitles: SideTitles(
-                          showTitles: true,
-                          interval: yRange / 5, // Match grid
-                          getTitlesWidget: (value, meta) {
-                            return Text(
-                              value.toStringAsFixed(1),
-                              style: TextStyle(
-                                color: Colors.grey.shade600,
-                                fontSize: 10,
-                              ),
-                              textAlign: TextAlign.left,
-                            );
-                          },
-                          reservedSize: 35,
-                        ),
-                      ),
-                    ),
-                    borderData: FlBorderData(
-                      show: false,
-                    ),
-                    minX: 0,
-                    maxX: (spots.length - 1).toDouble(),
-                    minY: minY,
-                    maxY: maxY,
-                    lineBarsData: [
-                      LineChartBarData(
-                        spots: spots,
-                        isCurved: true,
-                        curveSmoothness: 0.35,
-                        preventCurveOverShooting: true,
-                        color: primaryColor,
-                        barWidth: 3,
-                        isStrokeCapRound: true,
-                        dotData: FlDotData(
-                          show: true,
-                          getDotPainter: (spot, percent, barData, index) {
-                            return FlDotCirclePainter(
-                              radius: 4,
-                              color: Colors.white,
-                              strokeWidth: 2,
-                              strokeColor: primaryColor,
-                            );
-                          },
-                        ),
-                        belowBarData: BarAreaData(
-                          show: true,
-                          gradient: LinearGradient(
-                            colors: [
-                              primaryColor.withOpacity(0.3),
-                              primaryColor.withOpacity(0.0),
-                            ],
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
+                            },
+                            reservedSize: 30,
                           ),
                         ),
                       ),
-                    ],
-                    lineTouchData: LineTouchData(
-                      handleBuiltInTouches: true,
-                      touchTooltipData: LineTouchTooltipData(
-                        getTooltipItems: (List<LineBarSpot> touchedBarSpots) {
-                          return touchedBarSpots.map((barSpot) {
-                            final flSpot = barSpot;
-                            if (flSpot.x < 0 || flSpot.x >= chartData.length) {
-                              return null;
-                            }
-                            DateTime date = chartData[flSpot.x.toInt()]['date'];
-                            String unit = _getMetricUnit();
-                            return LineTooltipItem(
-                              '${DateFormat('MMM d, h:mm a').format(date)}\n',
-                              const TextStyle(
+                      borderData: FlBorderData(show: false),
+                      minX: 0,
+                      maxX: (spots.length - 1).toDouble(),
+                      minY: minY,
+                      maxY: maxY,
+                      lineBarsData: [
+                        LineChartBarData(
+                          spots: spots,
+                          isCurved: true,
+                          curveSmoothness: 0.35,
+                          preventCurveOverShooting: true,
+                          color: primaryColor,
+                          barWidth: 3,
+                          isStrokeCapRound: true,
+                          dotData: FlDotData(
+                            show: true,
+                            getDotPainter: (spot, percent, barData, index) {
+                              return FlDotCirclePainter(
+                                radius: 4.5,
                                 color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 10,
-                              ),
-                              children: [
-                                TextSpan(
-                                  text: '${flSpot.y} $unit',
-                                  style: TextStyle(
-                                    color: Colors.white, // primaryColor, // Tooltip background is dark usually
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 14,
-                                  ),
-                                ),
+                                strokeWidth: 2.5,
+                                strokeColor: primaryColor,
+                              );
+                            },
+                          ),
+                          belowBarData: BarAreaData(
+                            show: true,
+                            gradient: LinearGradient(
+                              colors: [
+                                primaryColor.withOpacity(0.35),
+                                primaryColor.withOpacity(0.0),
                               ],
-                            );
-                          }).toList();
-                        },
-                        tooltipRoundedRadius: 8,
-                        tooltipPadding: const EdgeInsets.all(8),
-                        fitInsideHorizontally: true,
-                        fitInsideVertically: true,
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                            ),
+                          ),
+                        ),
+                      ],
+                      lineTouchData: LineTouchData(
+                        handleBuiltInTouches: true,
+                        touchTooltipData: LineTouchTooltipData(
+                          getTooltipItems: (List<LineBarSpot> touchedBarSpots) {
+                            return touchedBarSpots.map((barSpot) {
+                              final flSpot = barSpot;
+                              if (flSpot.x < 0 || flSpot.x >= chartData.length) {
+                                return null;
+                              }
+                              DateTime date = chartData[flSpot.x.toInt()]['date'];
+                              String unit = _getMetricUnit();
+                              return LineTooltipItem(
+                                '${DateFormat('MMM d, h:mm a').format(date)}\n',
+                                const TextStyle(
+                                  color: Colors.white70,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 10,
+                                ),
+                                children: [
+                                  TextSpan(
+                                    text: '${flSpot.y} $unit',
+                                    style: TextStyle(
+                                      color: primaryColor,
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
+                              );
+                            }).toList();
+                          },
+                          tooltipRoundedRadius: 10,
+                          tooltipBorder: BorderSide(color: Colors.white.withOpacity(0.12), width: 1),
+                          getTooltipColor: (LineBarSpot touchedSpot) => const Color(0xFF0F172A).withOpacity(0.95),
+                          tooltipPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          fitInsideHorizontally: true,
+                          fitInsideVertically: true,
+                        ),
                       ),
                     ),
                   ),
@@ -557,15 +653,13 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
 
   Color _getMetricColor() {
     switch (_selectedMetric) {
-      case 'Temperature': return Colors.orange;
-      case 'pH': return Colors.green;
-      case 'Turbidity': return Colors.brown;
-      case 'Salinity': return Colors.blue;
-      default: return Colors.blue;
+      case 'Temperature': return const Color(0xFFF97316); // Premium orange
+      case 'pH': return const Color(0xFF10B981); // Emerald green
+      case 'Turbidity': return const Color(0xFFF59E0B); // Golden amber
+      case 'Salinity': return const Color(0xFF06B6D4); // Cyan
+      default: return const Color(0xFF6366F1);
     }
   }
-
-
 
   Widget _buildStockSection() {
     return _buildCard(
@@ -573,10 +667,10 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
         children: [
           _buildDetailRow('Species', widget.farmData['species'] ?? 'N/A'),
           _buildDetailRow('Quantity', widget.farmData['quantity'] ?? 'N/A'),
-          const Divider(),
+          const Divider(height: 20, color: Colors.white10),
           _buildDetailRow('Stock Date', widget.farmData['stockDate'] ?? 'N/A'),
           _buildDetailRow('Harvest Date', widget.farmData['harvestDate'] ?? 'N/A'),
-          const Divider(),
+          const Divider(height: 20, color: Colors.white10),
           _buildDetailRow('Feed Type', widget.farmData['feedType'] ?? 'N/A'),
           _buildDetailRow('Growth Stage', widget.farmData['growthStage'] ?? 'N/A'),
         ],
@@ -588,27 +682,42 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
     return _buildCard(
       child: Column(
         children: [
-          _buildAlertRow(Icons.coronavirus, 'Disease Alerts', widget.farmData['diseaseAlerts'] ?? 'None', Colors.red),
-          _buildAlertRow(Icons.flood, 'Flood History', widget.farmData['floodAlertHistory'] ?? 'None', Colors.orange),
-          _buildAlertRow(Icons.factory, 'Pollution Score', widget.farmData['pollutionScore'] ?? 'N/A', Colors.grey),
+          _buildAlertRow(Icons.coronavirus, 'Disease Alerts', widget.farmData['diseaseAlerts'] ?? 'None', Colors.redAccent),
+          const SizedBox(height: 8),
+          _buildAlertRow(Icons.flood, 'Flood History', widget.farmData['floodAlertHistory'] ?? 'None', Colors.orangeAccent),
+          const SizedBox(height: 8),
+          _buildAlertRow(Icons.factory, 'Pollution Score', widget.farmData['pollutionScore'] ?? 'N/A', Colors.lightBlueAccent),
         ],
       ),
     );
   }
   
   Widget _buildAlertRow(IconData icon, String label, String value, Color color) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6.0),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.02),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white.withOpacity(0.04)),
+      ),
       child: Row(
         children: [
-          Icon(icon, color: color, size: 20),
-          const SizedBox(width: 12),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color, size: 20),
+          ),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 12)),
-                Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
+                Text(label, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 11, color: Color(0xFF94A3B8))),
+                const SizedBox(height: 2),
+                Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
               ],
             ),
           ),
@@ -624,7 +733,7 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
           _buildDetailRow('Scheme Support', widget.farmData['scheme'] ?? 'N/A'),
           _buildDetailRow('Subsidy Info', widget.farmData['subsidyStatus'] ?? 'N/A'),
           _buildDetailRow('Insurance', widget.farmData['insuranceDetails'] ?? 'N/A'),
-          const Divider(),
+          const Divider(height: 20, color: Colors.white10),
           _buildDetailRow('Est. Revenue', widget.farmData['revenueEst'] ?? 'N/A', isBold: true),
         ],
       ),
@@ -640,33 +749,62 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
       filtered.remove('ID Proof');
     }
 
-    if (filtered.isEmpty) return const Text('No documents found.');
+    if (filtered.isEmpty) {
+      return _buildCard(
+        child: const Center(
+          child: Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              'No documents found.',
+              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+            ),
+          ),
+        ),
+      );
+    }
 
     return _buildCard(
       child: Column(
-        children: filtered.entries.map((e) => 
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
+        children: filtered.entries.map((e) {
+          final isVerified = e.value.toString().toLowerCase() == 'verified';
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(children: [
-                  const Icon(Icons.description, color: Colors.blue, size: 20),
-                  const SizedBox(width: 8),
-                  Text(e.key == 'Pollution Cert' ? 'Pollution Certificate' : e.key),
-                ]),
+                Row(
+                  children: [
+                    const Icon(Icons.description_outlined, color: Color(0xFF06B6D4), size: 18),
+                    const SizedBox(width: 10),
+                    Text(
+                      e.key == 'Pollution Cert' ? 'Pollution Certificate' : e.key,
+                      style: const TextStyle(color: Colors.white70, fontSize: 13),
+                    ),
+                  ],
+                ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.green.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(4),
+                    color: isVerified ? const Color(0xFF10B981).withOpacity(0.1) : Colors.amber.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: isVerified ? const Color(0xFF10B981).withOpacity(0.3) : Colors.amber.withOpacity(0.3),
+                    ),
                   ),
-                  child: Text(e.value.toString(), style: const TextStyle(fontSize: 10, color: Colors.green, fontWeight: FontWeight.bold)),
+                  child: Text(
+                    e.value.toString().toUpperCase(), 
+                    style: TextStyle(
+                      fontSize: 9, 
+                      color: isVerified ? const Color(0xFF10B981) : Colors.amber, 
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
                 ),
               ],
             ),
-          )
-        ).toList(),
+          );
+        }).toList(),
       ),
     );
   }
@@ -687,18 +825,36 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
     return Column(
       children: [
         Container(
-          width: 80,
-          height: 80,
+          width: 84,
+          height: 84,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: Colors.blue.withOpacity(0.05),
-            border: Border.all(color: Colors.blue.withOpacity(0.2), width: 2),
+            gradient: RadialGradient(
+              colors: [
+                const Color(0xFF6366F1).withOpacity(0.03),
+                const Color(0xFF06B6D4).withOpacity(0.08),
+              ],
+            ),
+            border: Border.all(color: const Color(0xFF06B6D4).withOpacity(0.25), width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF06B6D4).withOpacity(0.05),
+                blurRadius: 10,
+              ),
+            ],
           ),
           alignment: Alignment.center,
-          child: Text(value, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+          child: Padding(
+            padding: const EdgeInsets.all(4.0),
+            child: Text(
+              value, 
+              textAlign: TextAlign.center, 
+              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: Colors.white),
+            ),
+          ),
         ),
-        const SizedBox(height: 8),
-        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+        const SizedBox(height: 10),
+        Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
       ],
     );
   }
@@ -706,22 +862,33 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
   Widget _buildWorkflowSection() {
     return _buildCard(
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (widget.isAuthority) _buildStatusEditor(),
-          if (widget.isAuthority) const SizedBox(height: 8),
+          if (widget.isAuthority) ...[
+            _buildStatusEditor(),
+            const SizedBox(height: 16),
+            Container(height: 1, color: Colors.white.withOpacity(0.08)),
+            const SizedBox(height: 16),
+          ],
           _buildDetailRow('Last Inspector', widget.farmData['inspector'] ?? 'N/A'),
           _buildDetailRow('Inspection Date', widget.farmData['inspectionDate'] ?? 'N/A'),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(12),
-            color: Colors.yellow.shade50,
-            child: Text('Remarks: ${widget.farmData['remarks'] ?? 'None'}', style: TextStyle(fontStyle: FontStyle.italic, color: Colors.brown.shade700)),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0F172A),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.amber.withOpacity(0.15)),
+            ),
+            child: Text(
+              'Remarks: ${widget.farmData['remarks'] ?? 'None'}', 
+              style: const TextStyle(fontStyle: FontStyle.italic, color: Colors.amberAccent, fontSize: 12, height: 1.4),
+            ),
           ),
         ],
       ),
     );
-
   }
 
   Widget _buildStatusEditor() {
@@ -730,20 +897,23 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
 
     return Row(
       children: [
-        const Text('Status:', style: TextStyle(fontWeight: FontWeight.w600)),
-        const SizedBox(width: 12),
+        const Text('Status Action:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13)),
+        const SizedBox(width: 14),
         Expanded(
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             decoration: BoxDecoration(
-              color: Colors.grey.shade100,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.grey.shade300),
+              color: const Color(0xFF0F172A),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.white.withOpacity(0.08)),
             ),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
+                dropdownColor: const Color(0xFF0F172A),
                 value: current,
                 isExpanded: true,
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500, fontSize: 13),
+                icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF06B6D4)),
                 items: statuses.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
                 onChanged: (String? newValue) async {
                   if (newValue == null) return;
@@ -753,11 +923,23 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
                     final confirmed = await showDialog<bool>(
                       context: context,
                       builder: (context) => AlertDialog(
-                        title: const Text('Confirm Inactivate'),
-                        content: const Text('Marking this farm Inactive will restrict access to its details for non-authority users. Continue?'),
+                        backgroundColor: const Color(0xFF0F172A),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        title: const Text('Confirm Inactivate', style: TextStyle(color: Colors.white)),
+                        content: const Text(
+                          'Marking this farm Inactive will restrict access to its details for non-authority users. Continue?',
+                          style: TextStyle(color: Color(0xFF94A3B8)),
+                        ),
                         actions: [
-                          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-                          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Confirm')),
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false), 
+                            child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+                          ),
+                          ElevatedButton(
+                            onPressed: () => Navigator.pop(context, true), 
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+                            child: const Text('Confirm', style: TextStyle(color: Colors.white)),
+                          ),
                         ],
                       ),
                     );
@@ -769,7 +951,12 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
                     widget.farmData['status'] = newValue;
                   });
 
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Status updated to $newValue')));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Status updated to $newValue'),
+                      backgroundColor: Colors.indigoAccent,
+                    ),
+                  );
                 },
               ),
             ),
@@ -783,12 +970,17 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
 
   Widget _buildInfoRow(IconData icon, String text) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(
         children: [
-          Icon(icon, size: 16, color: Colors.grey),
-          const SizedBox(width: 8),
-          Expanded(child: Text(text, style: const TextStyle(color: Colors.black87))),
+          Icon(icon, size: 16, color: const Color(0xFF06B6D4)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text, 
+              style: const TextStyle(color: Color(0xFFE2E8F0), fontSize: 13),
+            ),
+          ),
         ],
       ),
     );
@@ -800,8 +992,15 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: TextStyle(color: Colors.grey.shade600)),
-          Text(value, style: TextStyle(fontWeight: isBold ? FontWeight.bold : FontWeight.normal)),
+          Text(label, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+          Text(
+            value, 
+            style: TextStyle(
+              fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+              color: isBold ? Colors.white : const Color(0xFFE2E8F0),
+              fontSize: 13,
+            ),
+          ),
         ],
       ),
     );
@@ -809,29 +1008,35 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
   
   Widget _buildDetailItem(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Text(label, style: TextStyle(fontSize: 10, color: Colors.grey.shade500)),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
+          Text(label, style: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8), letterSpacing: 0.5)),
+          const SizedBox(height: 4),
+          Text(
+            value, 
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white),
+          ),
         ],
       ),
     );
   }
 
   Widget _buildStatusBadge(String status) {
-    Color color = status == 'Active' ? Colors.green : (status == 'Pending Approval' ? Colors.orange : Colors.grey);
+    Color color = status == 'Active' 
+        ? const Color(0xFF10B981) // Emerald
+        : (status == 'Pending Approval' ? const Color(0xFFF59E0B) : const Color(0xFF64748B));
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withOpacity(0.08),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.5)),
+        border: Border.all(color: color.withOpacity(0.3), width: 1.2),
       ),
       child: Text(
         status,
-        style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12),
+        style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.5),
       ),
     );
   }

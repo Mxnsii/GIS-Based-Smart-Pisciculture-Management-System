@@ -4,6 +4,8 @@ import 'dashboard_screen.dart';
 import '../services/auth_service.dart';
 import 'package:aqua_app/screens/farmer_screen.dart';
 import 'chatbot_screen.dart';
+import '../widgets/glass_card.dart';
+import '../widgets/swimming_fish_background.dart';
 
 
 class LoginScreen extends StatefulWidget {
@@ -107,44 +109,20 @@ if (_isAuthority) {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          image: DecorationImage(
-            image: const AssetImage('assets/images/bg.png'),
-            fit: BoxFit.cover,
-            colorFilter: ColorFilter.mode(
-              Colors.black.withOpacity(0.72), // Premium dark translucent overlay
-              BlendMode.darken,
-            ),
-          ),
-        ),
+      body: SwimmingFishBackground(
+        fishCount: 95,
         child: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24.0),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 420),
-              child: Container(
+              child: GlassCard(
+                borderRadius: 24,
+                blur: 16,
+                backgroundColor: const Color(0x6F0F172A), // Premium translucent dark slate navy (frosted glass)
+                borderColor: Colors.indigoAccent.withOpacity(0.25),
+                borderWidth: 1.5,
                 padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 36),
-                decoration: BoxDecoration(
-                  color: const Color(0xEC0F172A), // Semi-translucent premium dark slate navy
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(
-                    color: Colors.indigoAccent.withOpacity(0.25),
-                    width: 1.5,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.4),
-                      blurRadius: 24,
-                      offset: const Offset(0, 12),
-                    ),
-                    BoxShadow(
-                      color: Colors.indigoAccent.withOpacity(0.04),
-                      blurRadius: 16,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
                 child: Form(
                   key: _formKey,
                   child: Column(

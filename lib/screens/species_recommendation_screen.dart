@@ -111,7 +111,7 @@ class _SpeciesRecommendationScreenState extends State<SpeciesRecommendationScree
                 if (_recommendations.isNotEmpty) ...[
                   const Text(
                     'Recommended Species',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
                   ),
                   const SizedBox(height: 12),
                   ..._recommendations.map((rec) => _buildRecommendationCard(rec)),
@@ -226,7 +226,7 @@ class _SpeciesRecommendationScreenState extends State<SpeciesRecommendationScree
               children: [
                 Text(
                   rec['species'],
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
                 Text(
                   'Score: ${rec['score'].toStringAsFixed(1)}%',

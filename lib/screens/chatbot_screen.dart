@@ -1,9 +1,11 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/chatbot_service.dart';
 import '../services/chat_storage_service.dart';
 import '../widgets/custom_back_button.dart';
+import '../widgets/glass_card.dart';
 
 class ChatbotScreen extends StatefulWidget {
   final bool isAuthority;
@@ -13,7 +15,7 @@ class ChatbotScreen extends StatefulWidget {
   State<ChatbotScreen> createState() => _ChatbotScreenState();
 }
 
-class _ChatbotScreenState extends State<ChatbotScreen> {
+class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProviderStateMixin {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   
@@ -22,18 +24,43 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
   
   late String _userId;
   bool _isTyping = false;
+  late AnimationController _orbController;
+
+  final List<String> _quickReplies = [
+    'Check White Spot Risk',
+    'Ideal pond salinity?',
+    'Pond subsidies?',
+    'Analyze stress levels',
+  ];
 
   @override
   void initState() {
     super.initState();
     _userId = FirebaseAuth.instance.currentUser?.uid ?? 'anonymous_user';
+    
+    // Animation controller for the glowing virtual assistant orb
+    _orbController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2000),
+    );
+    _orbController.repeat(reverse: true);
   }
 
-  Future<void> _sendMessage() async {
-    final text = _messageController.text.trim();
+  @override
+  void dispose() {
+    _messageController.dispose();
+    _scrollController.dispose();
+    _orbController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _sendMessage([String? customText]) async {
+    final text = customText ?? _messageController.text.trim();
     if (text.isEmpty) return;
 
-    _messageController.clear();
+    if (customText == null) {
+      _messageController.clear();
+    }
 
     // 1. Save user msg to Firestore
     await _chatStorageService.saveMessage(_userId, 'user', text);
@@ -88,39 +115,117 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey.shade100,
+      backgroundColor: const Color(0xFF090D16), // Premium dark mode background
       appBar: AppBar(
+        backgroundColor: const Color(0xFF0F172A),
+        elevation: 0,
+        leadingWidth: 68,
+        leading: CustomBackButton(onPressed: () => Navigator.pop(context)),
         title: Row(
           children: [
-            const CircleAvatar(
-              backgroundColor: Colors.blueAccent,
-              child: Icon(Icons.support_agent, color: Colors.white),
+            // Holographic pulsing assistant orb
+            AnimatedBuilder(
+              animation: _orbController,
+              builder: (context, child) {
+                return Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: const RadialGradient(
+                      colors: [Color(0xFF06B6D4), Color(0xFF6366F1)],
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF06B6D4).withOpacity(0.35 + (_orbController.value * 0.25)),
+                        blurRadius: 10 + (_orbController.value * 8),
+                        spreadRadius: 1 + (_orbController.value * 3),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.online_prediction,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                );
+              },
             ),
-            const SizedBox(width: 12),
-            const Text(
-              'GIS Agent',
-              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black),
+            const SizedBox(width: 14),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'AquaGIS Copilot',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    fontSize: 16,
+                  ),
+                ),
+                Text(
+                  _isTyping ? 'AI is processing...' : 'Online AI Assistant',
+                  style: TextStyle(
+                    color: _isTyping ? const Color(0xFF06B6D4) : const Color(0xFF94A3B8),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
-        backgroundColor: Colors.white,
-        elevation: 1,
-        leading: CustomBackButton(onPressed: () => Navigator.pop(context)),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1.0),
+          child: Container(
+            color: Colors.white.withOpacity(0.08),
+            height: 1.0,
+          ),
+        ),
       ),
       body: Column(
         children: [
+          // Dynamic Message Feed
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: _chatStorageService.getChatHistory(_userId),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                   return const Center(child: CircularProgressIndicator());
+                   return const Center(child: CircularProgressIndicator(color: Color(0xFF06B6D4)));
                 }
                 if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return const Center(
-                    child: Text(
-                      'Start chatting with the GIS Agent!',
-                      style: TextStyle(color: Colors.grey, fontSize: 16),
+                  return Center(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.chat_bubble_outline,
+                            color: Colors.white.withOpacity(0.12),
+                            size: 64,
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Begin your session with AquaGIS Copilot',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Ask about species suitability, salinity metrics,\nsubsidies, or biosecurity recommendations.',
+                            style: TextStyle(
+                              color: const Color(0xFF94A3B8),
+                              fontSize: 13,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 32),
+                          _buildInitialQuickReplies(),
+                        ],
+                      ),
                     ),
                   );
                 }
@@ -142,20 +247,51 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
             ),
           ),
           
-          if (_isTyping)
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'GIS Agent is typing...',
-                  style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey),
-                ),
-              ),
-            ),
+          // Typing Indicator
+          if (_isTyping) _buildTypingIndicator(),
+
+          // Inline Quick Action Chips
+          _buildQuickActionChips(),
             
+          // Input panel
           _buildMessageInput(),
         ],
+      ),
+    );
+  }
+
+  Widget _buildInitialQuickReplies() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 10,
+        alignment: WrapAlignment.center,
+        children: _quickReplies.map((reply) {
+          return InkWell(
+            onTap: () => _sendMessage(reply),
+            borderRadius: BorderRadius.circular(20),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E293B).withOpacity(0.4),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.white.withOpacity(0.08)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.rocket_launch, color: Color(0xFF06B6D4), size: 14),
+                  const SizedBox(width: 8),
+                  Text(
+                    reply,
+                    style: const TextStyle(color: Colors.white70, fontSize: 13),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }).toList(),
       ),
     );
   }
@@ -163,43 +299,124 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
   Widget _buildMessageBubble(String content, bool isUser) {
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.75,
-        ),
-        decoration: BoxDecoration(
-          color: isUser ? Colors.blue : Colors.white,
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(16),
-            topRight: const Radius.circular(16),
-            bottomLeft: Radius.circular(isUser ? 16 : 0),
-            bottomRight: Radius.circular(isUser ? 0 : 16),
+      child: Column(
+        crossAxisAlignment: isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              if (!isUser) ...[
+                const Icon(Icons.smart_toy, color: Color(0xFF06B6D4), size: 16),
+                const SizedBox(width: 6),
+              ],
+              Text(
+                isUser ? 'You' : 'AquaGIS Copilot',
+                style: const TextStyle(
+                  color: Color(0xFF64748B),
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
           ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 5,
-              offset: const Offset(0, 2),
+          const SizedBox(height: 4),
+          GlassCard(
+            borderRadius: 16.0,
+            blur: 10.0,
+            backgroundColor: isUser
+                ? const Color(0xFF6366F1).withOpacity(0.15) // Indigo translucent
+                : const Color(0xFF1E293B).withOpacity(0.45), // Slate translucent
+            borderColor: isUser
+                ? const Color(0xFF6366F1).withOpacity(0.3)
+                : const Color(0xFF06B6D4).withOpacity(0.2),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            margin: const EdgeInsets.only(bottom: 16),
+            child: Container(
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width * 0.72,
+              ),
+              child: Text(
+                content,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  height: 1.45,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTypingIndicator() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.auto_awesome, color: Color(0xFF06B6D4), size: 14),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E293B).withOpacity(0.4),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFF06B6D4).withOpacity(0.15)),
+              ),
+              child: Row(
+                children: [
+                  const Text(
+                    'Copilot is writing',
+                    style: TextStyle(
+                      color: Color(0xFF94A3B8),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  _AnimatedDots(),
+                ],
+              ),
             ),
           ],
         ),
-        child: Text(
-          content,
-          style: TextStyle(
-            color: isUser ? Colors.white : Colors.black87,
-            fontSize: 15,
-            height: 1.4, // for markdown-like spacing
-          ),
-        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickActionChips() {
+    return SizedBox(
+      height: 48,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        children: _quickReplies.map((reply) {
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ActionChip(
+              backgroundColor: const Color(0xFF0F172A),
+              side: BorderSide(color: Colors.indigoAccent.withOpacity(0.2)),
+              label: Text(
+                reply,
+                style: const TextStyle(color: Colors.white70, fontSize: 12),
+              ),
+              onPressed: () => _sendMessage(reply),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+            ),
+          );
+        }).toList(),
       ),
     );
   }
 
   Widget _buildMessageInput() {
     return Container(
-      color: Colors.white,
+      color: const Color(0xFF0F172A),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: SafeArea(
         child: Row(
@@ -207,37 +424,102 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
+                  color: const Color(0xFF090D16),
                   borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: Colors.white.withOpacity(0.08)),
                 ),
                 child: TextField(
                   controller: _messageController,
                   textCapitalization: TextCapitalization.sentences,
                   minLines: 1,
                   maxLines: 4,
+                  style: const TextStyle(color: Colors.white),
                   decoration: const InputDecoration(
-                    hintText: 'Ask about pisiculture, subsidies...',
+                    hintText: 'Message AquaGIS Copilot...',
+                    hintStyle: TextStyle(color: Color(0xFF64748B)),
                     border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                   ),
                 ),
               ),
             ),
             const SizedBox(width: 12),
             GestureDetector(
-              onTap: _sendMessage,
+              onTap: () => _sendMessage(),
               child: Container(
                 padding: const EdgeInsets.all(12),
                 decoration: const BoxDecoration(
-                  color: Colors.blue,
+                  color: Colors.indigoAccent,
                   shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black26,
+                      blurRadius: 4,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
                 ),
-                child: const Icon(Icons.send, color: Colors.white, size: 24),
+                child: const Icon(Icons.send, color: Colors.white, size: 20),
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _AnimatedDots extends StatefulWidget {
+  @override
+  State<_AnimatedDots> createState() => _AnimatedDotsState();
+}
+
+class _AnimatedDotsState extends State<_AnimatedDots> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        double cycle = _controller.value * 3.0;
+        return Row(
+          children: List.generate(3, (index) {
+            double bounce = 0.0;
+            double diff = cycle - index;
+            if (diff >= 0 && diff <= 1.0) {
+              bounce = math.sin(diff * math.pi) * -4.0;
+            }
+            return Container(
+              margin: const EdgeInsets.only(left: 3),
+              transform: Matrix4.translationValues(0, bounce, 0),
+              width: 5,
+              height: 5,
+              decoration: const BoxDecoration(
+                color: Color(0xFF06B6D4),
+                shape: BoxShape.circle,
+              ),
+            );
+          }),
+        );
+      },
     );
   }
 }

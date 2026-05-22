@@ -7,6 +7,7 @@ import '../widgets/custom_back_button.dart';
 import '../services/gis_service.dart'; // Import the service
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_map_marker_cluster/flutter_map_marker_cluster.dart';
+import '../widgets/glass_card.dart';
 
 class GisMapView extends StatefulWidget {
   final double? initialLat;
@@ -87,9 +88,8 @@ class _GisMapViewState extends State<GisMapView> {
     }
   }
 
-  // Mock Data (Synchronized with Farm Registry) - [Keep existing _defaultFarms list]
+  // Mock Data (Synchronized with Farm Registry)
   final List<Map<String, dynamic>> _defaultFarms = [
-    // ... [Keep existing farms data as is] ...
     {
       "id": "FRM-2024-001",
       "name": "Goa Smart Prawn Farm",
@@ -245,7 +245,7 @@ class _GisMapViewState extends State<GisMapView> {
       "do": "N/A",
       "salinity": "N/A",
       "lastUpdate": "Offline (30 days)",
-      "riskStatus": "Critical", // Offline
+      "riskStatus": "Critical", 
       "alarmCount": 0,
       "species": "Asian Seabass",
       "quantity": "0",
@@ -342,23 +342,20 @@ class _GisMapViewState extends State<GisMapView> {
   Color _getStatusColor(String status) {
     switch (status) {
       case 'Active':
-        return Colors.green;
+        return const Color(0xFF10B981); // Emerald
       case 'Pending Approval':
-        return Colors.orange;
+        return const Color(0xFFF59E0B); // Amber
       case 'Inactive':
-        return Colors.grey;
+        return const Color(0xFF64748B); // Slate
       case 'Rejected':
-        return Colors.red;
+        return const Color(0xFFEF4444); // Red
       default:
-        return Colors.blue;
+        return const Color(0xFF3B82F6); // Blue
     }
   }
   
   void _onHover(PointerEvent details) {
-    // Get the local position of the mouse relative to the map
     final point = math.Point(details.localPosition.dx, details.localPosition.dy);
-    
-    // Convert to LatLng
     final latLng = _mapController.camera.pointToLatLng(point);
     
     setState(() {
@@ -369,7 +366,6 @@ class _GisMapViewState extends State<GisMapView> {
   Widget _buildMarkerLayer(List<Map<String, dynamic>> farmsToShow) {
     return MarkerLayer(
       markers: farmsToShow.map((farm) {
-        // Handle parsing logic defensively since Firebase might send strings
         double lat = 15.0;
         double lng = 73.0;
         if (farm['lat'] != null) {
@@ -379,6 +375,8 @@ class _GisMapViewState extends State<GisMapView> {
           lng = farm['lng'] is String ? double.tryParse(farm['lng']) ?? 73.0 : farm['lng'].toDouble();
         }
 
+        final Color statusColor = _getStatusColor(farm['status'] ?? 'Unknown');
+
         return Marker(
           point: LatLng(lat, lng),
           width: 80,
@@ -387,60 +385,112 @@ class _GisMapViewState extends State<GisMapView> {
             onTap: () {
               showDialog(
                 context: context,
-                builder: (context) => AlertDialog(
-                  title: Text(farm['name'] ?? 'Unknown Farm'),
-                  content: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Owner: ${farm['owner'] ?? 'Unknown'}'),
-                      const SizedBox(height: 8),
-                      Text('Status: ${farm['status'] ?? 'Unknown'}'),
-                      const SizedBox(height: 8),
-                      Text('Lat: $lat, Lng: $lng', style: const TextStyle(fontWeight: FontWeight.w500)),
-                    ],
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Close'),
-                    ),
-                    if ((farm['status'] ?? '') != 'Inactive')
-                      ElevatedButton(
-                        onPressed: () {
-                          Navigator.pop(context); // Close dialog
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => FarmDetailsScreen(farmData: farm, isAuthority: widget.isAuthority),
+                builder: (context) => Dialog(
+                  backgroundColor: Colors.transparent,
+                  child: GlassCard(
+                    borderRadius: 20,
+                    blur: 15,
+                    backgroundColor: const Color(0xFF0F172A).withOpacity(0.95),
+                    borderColor: statusColor.withOpacity(0.3),
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                farm['name'] ?? 'Unknown Farm',
+                                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16),
+                              ),
                             ),
-                          );
-                        },
-                        child: const Text('VIEW MORE DETAILS'),
-                      ),
-                  ],
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: statusColor.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: statusColor.withOpacity(0.4), width: 1),
+                              ),
+                              child: Text(
+                                farm['status'] ?? 'Unknown',
+                                style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 10, letterSpacing: 0.5),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        Container(height: 1, color: Colors.white.withOpacity(0.08)),
+                        const SizedBox(height: 16),
+                        _buildDialogDetailRow('Owner', farm['owner'] ?? 'Unknown'),
+                        _buildDialogDetailRow('License', farm['license'] ?? 'N/A'),
+                        _buildDialogDetailRow('Coordinates', '${lat.toStringAsFixed(4)}, ${lng.toStringAsFixed(4)}'),
+                        const SizedBox(height: 24),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('Close', style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
+                            ),
+                            const SizedBox(width: 12),
+                            if ((farm['status'] ?? '') != 'Inactive')
+                              ElevatedButton(
+                                onPressed: () {
+                                  Navigator.pop(context); // Close dialog
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => FarmDetailsScreen(farmData: farm, isAuthority: widget.isAuthority),
+                                    ),
+                                  );
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF6366F1),
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                ),
+                                child: const Text('View Full Details', style: TextStyle(fontWeight: FontWeight.bold)),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               );
             },
             child: Tooltip(
               message: '${farm['name']}\nLat: $lat, Lng: $lng',
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  Icon(
-                    Icons.location_on,
-                    color: _getStatusColor(farm['status'] ?? 'Unknown'),
-                    size: 40,
-                  ),
-                  const Positioned(
-                    top: 6,
-                    child: Icon(
-                      Icons.agriculture,
-                      color: Colors.white,
-                      size: 16,
+              textStyle: const TextStyle(color: Colors.white, fontSize: 11),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0F172A).withOpacity(0.9),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.white.withOpacity(0.08)),
+              ),
+              child: PulsingRadarMarker(
+                color: statusColor,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Icon(
+                      Icons.location_on,
+                      color: statusColor,
+                      size: 38,
                     ),
-                  ),
-                ],
+                    const Positioned(
+                      top: 5,
+                      child: Icon(
+                        Icons.agriculture,
+                        color: Colors.white,
+                        size: 14,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -449,30 +499,53 @@ class _GisMapViewState extends State<GisMapView> {
     );
   }
 
+  Widget _buildDialogDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+          Text(value, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500)),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Determine center: use passed arguments if available, otherwise default
     final LatLng center = (widget.initialLat != null && widget.initialLng != null)
         ? LatLng(widget.initialLat!, widget.initialLng!)
         : const LatLng(15.4989, 73.8278);
 
     return Scaffold(
+      backgroundColor: const Color(0xFF090D16),
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        title: const Text('GIS Map View'),
-        // Only show back button if pushed (which happens when selecting coordinates)
-        leadingWidth: 80, // Allow more width for text
+        title: const Text(
+          'GIS Map View',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+        ),
+        backgroundColor: const Color(0xFF0F172A),
+        elevation: 0,
+        leadingWidth: 80,
         leading: widget.showBackButton && Navigator.canPop(context) 
           ? CustomBackButton(
               onPressed: () => Navigator.pop(context),
             )
-          : null, // Default logic when used in BottomNavBar
+          : null,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1.0),
+          child: Container(
+            color: Colors.white.withOpacity(0.08),
+            height: 1.0,
+          ),
+        ),
       ),
       body: Stack(
         children: [
           MouseRegion(
             onHover: _onHover,
-            // Use transparent cursor or default to allow map interaction
             cursor: SystemMouseCursors.basic,
             child: FlutterMap(
               mapController: _mapController,
@@ -480,7 +553,6 @@ class _GisMapViewState extends State<GisMapView> {
                 initialCenter: center,
                 initialZoom: widget.initialZoom,
                 onPositionChanged: (position, hasGesture) {
-                  // Update the dropdown if the user zooms via gestures
                   _updateScaleFromZoom(position.zoom ?? widget.initialZoom);
                 },
               ),
@@ -491,14 +563,12 @@ class _GisMapViewState extends State<GisMapView> {
                       : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                   userAgentPackageName: 'com.agriconnect.app',
                 ),
-                // Hybrid Labels Overlay (Only for Satellite)
                 if (_isSatellite)
                   TileLayer(
                     urlTemplate: 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
                     userAgentPackageName: 'com.agriconnect.app',
-                    backgroundColor: Colors.transparent, // Ensure transparency
+                    backgroundColor: Colors.transparent,
                   ),
-                // NEW: Polygon Layer for QGIS Import
                 PolygonLayer(
                   polygons: _farmPolygons,
                 ),
@@ -529,15 +599,13 @@ class _GisMapViewState extends State<GisMapView> {
                   StreamBuilder<QuerySnapshot>(
                     stream: FirebaseFirestore.instance
                         .collection('complaints')
-                        .where('status', isEqualTo: 'Action Taken') // Filter for Action Taken
+                        .where('status', isEqualTo: 'Action Taken')
                         .snapshots(),
                     builder: (context, snapshot) {
                       if (!snapshot.hasData) return const SizedBox();
                       
-                      // 1. Group similar suspicious activities
                       Map<String, List<Marker>> groupedMarkers = {};
 
-                      // Activity Styles Mapping
                       Map<String, Map<String, dynamic>> activityStyles = {
                         'Fishing in Banned Area (CRZ / Protected Zone)': {'tag': 'CRZ', 'color': Colors.red},
                         'Fishing During Ban Season': {'tag': 'BS', 'color': Colors.orange},
@@ -552,7 +620,6 @@ class _GisMapViewState extends State<GisMapView> {
                         if (data['location'] != null && data['location'] is GeoPoint) {
                           final point = data['location'] as GeoPoint;
                           
-                          // Extract attributes
                           String activity = (data['activityType'] ?? 'Other').toString();
                           final style = activityStyles[activity] ?? activityStyles['Other']!;
                           final Color groupColor = style['color'];
@@ -571,62 +638,84 @@ class _GisMapViewState extends State<GisMapView> {
                               onTap: () {
                                  showDialog(
                                    context: context,
-                                   builder: (context) => AlertDialog(
-                                      title: const Text('Incident Report', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
-                                      content: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text.rich(
-                                            TextSpan(
-                                              children: [
-                                                const TextSpan(text: 'Activity: ', style: TextStyle(fontWeight: FontWeight.bold)),
-                                                TextSpan(text: '${data['activityType']}'),
-                                              ],
-                                            ),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text.rich(
-                                            TextSpan(
-                                              children: [
-                                                const TextSpan(text: 'Vessel: ', style: TextStyle(fontWeight: FontWeight.bold)),
-                                                TextSpan(text: '${data['vesselType']}'),
-                                              ],
-                                            ),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          if (data['aiAnalysis'] != null)
-                                             Text('Priority: ${data['aiAnalysis']['priority']}', style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-                                        ]
-                                      ),
-                                      actions: [
-                                        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
-                                        ElevatedButton(
-                                          onPressed: () {
-                                            Navigator.pop(context); // Close summary dialog
-                                            _showDetailedComplaint(context, data);
-                                          },
-                                          style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white),
-                                          child: const Text('More Details'),
-                                        ),
-                                      ]
-                                   )
+                                   builder: (context) => Dialog(
+                                     backgroundColor: Colors.transparent,
+                                     child: GlassCard(
+                                       borderRadius: 20,
+                                       blur: 15,
+                                       backgroundColor: const Color(0xFF0F172A).withOpacity(0.95),
+                                       borderColor: Colors.redAccent.withOpacity(0.3),
+                                       padding: const EdgeInsets.all(24),
+                                       child: Column(
+                                         mainAxisSize: MainAxisSize.min,
+                                         crossAxisAlignment: CrossAxisAlignment.start,
+                                         children: [
+                                           const Row(
+                                             children: [
+                                               Icon(Icons.crisis_alert, color: Colors.redAccent, size: 20),
+                                               SizedBox(width: 8),
+                                               Text(
+                                                 'Incident Report', 
+                                                 style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16),
+                                               ),
+                                             ],
+                                           ),
+                                           const SizedBox(height: 16),
+                                           Container(height: 1, color: Colors.white.withOpacity(0.08)),
+                                           const SizedBox(height: 16),
+                                           _buildDialogDetailRow('Activity', data['activityType'] ?? 'Other'),
+                                           _buildDialogDetailRow('Vessel', data['vesselType'] ?? 'Unknown'),
+                                           if (data['aiAnalysis'] != null)
+                                              _buildDialogDetailRow('AI Priority', '${data['aiAnalysis']['priority']}'),
+                                           const SizedBox(height: 24),
+                                           Row(
+                                             mainAxisAlignment: MainAxisAlignment.end,
+                                             children: [
+                                               TextButton(
+                                                 onPressed: () => Navigator.pop(context), 
+                                                 child: const Text('Close', style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
+                                               ),
+                                               const SizedBox(width: 12),
+                                               ElevatedButton(
+                                                 onPressed: () {
+                                                   Navigator.pop(context);
+                                                   _showDetailedComplaint(context, data);
+                                                 },
+                                                 style: ElevatedButton.styleFrom(
+                                                   backgroundColor: const Color(0xFF6366F1),
+                                                   foregroundColor: Colors.white,
+                                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                                 ),
+                                                 child: const Text('View Full Details', style: TextStyle(fontWeight: FontWeight.bold)),
+                                               ),
+                                             ],
+                                           ),
+                                         ],
+                                       ),
+                                     ),
+                                   ),
                                  );
                               },
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: groupColor.withOpacity(0.9),
-                                  border: Border.all(color: Colors.white, width: 2),
-                                  boxShadow: [
-                                    BoxShadow(color: groupColor.withOpacity(0.5), blurRadius: 10, spreadRadius: 2),
-                                    if (isAIHotspot) BoxShadow(color: Colors.red.withOpacity(0.8), blurRadius: 15, spreadRadius: 4),
-                                  ],
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    labelTag,
-                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10),
+                              child: PulsingRadarMarker(
+                                color: groupColor,
+                                child: Container(
+                                  width: 32,
+                                  height: 32,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: groupColor.withOpacity(0.9),
+                                    border: Border.all(color: Colors.white, width: 2),
+                                    boxShadow: [
+                                      BoxShadow(color: groupColor.withOpacity(0.5), blurRadius: 10, spreadRadius: 2),
+                                      if (isAIHotspot) BoxShadow(color: Colors.red.withOpacity(0.8), blurRadius: 15, spreadRadius: 4),
+                                    ],
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      labelTag,
+                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10),
+                                    ),
                                   ),
                                 ),
                               ),
@@ -637,11 +726,9 @@ class _GisMapViewState extends State<GisMapView> {
                         }
                       }
 
-                      // 2. Build clustered hotspots per Activity Group based on spatial proximity
                       List<Widget> categoricalClusterLayers = [];
 
                       groupedMarkers.forEach((activityName, markers) {
-                        // Get style or default to 'Other'
                         final style = activityStyles[activityName] ?? activityStyles['Other']!;
                         final Color groupColor = style['color'];
                         final String labelTag = style['tag'];
@@ -674,11 +761,11 @@ class _GisMapViewState extends State<GisMapView> {
                                     children: [
                                       Text(
                                         clusterMarkers.length.toString(),
-                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
                                       ),
                                       Text(
                                         labelTag,
-                                        style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 1),
+                                        style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.w900, fontSize: 9, letterSpacing: 0.5),
                                       ),
                                     ],
                                   ),
@@ -697,19 +784,17 @@ class _GisMapViewState extends State<GisMapView> {
                       },
                   ),
 
-                // REAL-TIME: MARITIME SAFETY & FISH DENSITY LAYERS (SOURCE: INCOIS MAR 2026)
                 if (_showSafetyZones)
                   CircleLayer(
                     circles: [
                       CircleMarker(
                         point: const LatLng(15.42, 73.78), // Mormugao Harbour (Safe Entry)
-                        color: Colors.green.withOpacity(0.2),
-                        borderStrokeWidth: 2,
+                        color: Colors.green.withOpacity(0.12),
+                        borderStrokeWidth: 1.5,
                         borderColor: Colors.green,
                         useRadiusInMeter: true,
                         radius: 5000,
                       ),
-                      // NO ACTIVE DANGER ZONES TODAY (INCOIS BULLETIN 28-MAR-2026: STATUS CLEAR)
                     ],
                   ),
                 
@@ -737,12 +822,11 @@ class _GisMapViewState extends State<GisMapView> {
                     ],
                   ),
 
-                 // Attribution
                 RichAttributionWidget(
                   attributions: [
                     TextSourceAttribution(
                       _isSatellite ? 'Esri World Imagery' : 'OpenStreetMap contributors',
-                      onTap: () {}, // No-op
+                      onTap: () {},
                     ),
                   ],
                 ),
@@ -750,204 +834,122 @@ class _GisMapViewState extends State<GisMapView> {
             ),
           ),
           
-          // Layer Switcher
+          // Unified Premium Sidebar HUD
           Positioned(
             top: 20,
-            right: 20,
-            child: Material(
-              elevation: 4,
-              borderRadius: BorderRadius.circular(8),
-              color: Colors.white,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(8),
-                onTap: () {
-                  setState(() {
-                    _isSatellite = !_isSatellite;
-                  });
-                },
-                child: Container(
-                  width: 65,
-                  padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        _isSatellite ? Icons.map_outlined : Icons.satellite_alt,
-                        color: Colors.blue.shade900,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _isSatellite ? 'Street' : 'Satellite',
-                        style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
-                      ),
-                    ],
+            right: 16,
+            child: GlassCard(
+              borderRadius: 20,
+              blur: 15,
+              backgroundColor: const Color(0xFF0F172A).withOpacity(0.85),
+              borderColor: Colors.indigoAccent.withOpacity(0.2),
+              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildSidebarToggle(
+                    icon: _isSatellite ? Icons.map_outlined : Icons.satellite_alt,
+                    label: 'Map Type',
+                    isActive: _isSatellite,
+                    activeColor: const Color(0xFF06B6D4),
+                    onTap: () => setState(() => _isSatellite = !_isSatellite),
                   ),
-                ),
-              ),
-            ),
-          ),
-
-          // Hotspots Toggle Switcher
-          Positioned(
-            top: 90,
-            right: 20,
-            child: Material(
-              elevation: 4,
-              borderRadius: BorderRadius.circular(8),
-              color: Colors.white,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(8),
-                onTap: () {
-                  setState(() {
-                    _showHotspots = !_showHotspots;
-                  });
-                },
-                child: Container(
-                  width: 65,
-                  padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.crisis_alert,
-                        color: _showHotspots ? Colors.red : Colors.grey,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Hotspots',
-                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: _showHotspots ? Colors.red : Colors.grey.shade800),
-                      ),
-                    ],
+                  const SizedBox(height: 14),
+                  _buildSidebarToggle(
+                    icon: Icons.crisis_alert,
+                    label: 'Incident Hotspots',
+                    isActive: _showHotspots,
+                    activeColor: const Color(0xFFEF4444),
+                    onTap: () => setState(() => _showHotspots = !_showHotspots),
                   ),
-                ),
-              ),
-            ),
-          ),
-
-          // Safety Zones Toggle
-          Positioned(
-            top: 160,
-            right: 20,
-            child: Material(
-              elevation: 4,
-              borderRadius: BorderRadius.circular(8),
-              color: Colors.white,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(8),
-                onTap: () {
-                  setState(() {
-                    _showSafetyZones = !_showSafetyZones;
-                  });
-                },
-                child: Container(
-                  width: 65,
-                  padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.security,
-                        color: _showSafetyZones ? Colors.green : Colors.grey,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Safety',
-                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: _showSafetyZones ? Colors.green : Colors.grey.shade800),
-                      ),
-                    ],
+                  const SizedBox(height: 14),
+                  _buildSidebarToggle(
+                    icon: Icons.security,
+                    label: 'Maritime Safety',
+                    isActive: _showSafetyZones,
+                    activeColor: const Color(0xFF10B981),
+                    onTap: () => setState(() => _showSafetyZones = !_showSafetyZones),
                   ),
-                ),
-              ),
-            ),
-          ),
-
-          // Fish Density Toggle
-          Positioned(
-            top: 230,
-            right: 20,
-            child: Material(
-              elevation: 4,
-              borderRadius: BorderRadius.circular(8),
-              color: Colors.white,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(8),
-                onTap: () {
-                  setState(() {
-                    _showFishDensity = !_showFishDensity;
-                  });
-                },
-                child: Container(
-                  width: 65,
-                  padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.sailing,
-                        color: _showFishDensity ? Colors.blue : Colors.grey,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Fish',
-                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: _showFishDensity ? Colors.blue : Colors.grey.shade800),
-                      ),
-                    ],
+                  const SizedBox(height: 14),
+                  _buildSidebarToggle(
+                    icon: Icons.sailing,
+                    label: 'Fish Density',
+                    isActive: _showFishDensity,
+                    activeColor: const Color(0xFF3B82F6),
+                    onTap: () => setState(() => _showFishDensity = !_showFishDensity),
                   ),
-                ),
+                ],
               ),
             ),
           ),
 
           // Coordinate Overlay at Bottom
           Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
-              color: Colors.white.withOpacity(0.9),
+            left: 16,
+            right: 16,
+            bottom: 16,
+            child: GlassCard(
+              borderRadius: 16,
+              blur: 12,
+              backgroundColor: const Color(0xFF0F172A).withOpacity(0.85),
+              borderColor: Colors.indigoAccent.withOpacity(0.2),
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Row(
                     children: [
-                        const Icon(Icons.my_location, size: 16, color: Colors.blueGrey),
-                        const SizedBox(width: 8),
-                         Text(
-                            _hoveredLatLng != null 
-                                ? '${_hoveredLatLng!.latitude.toStringAsFixed(5)}, ${_hoveredLatLng!.longitude.toStringAsFixed(5)}'
-                                : 'Generic Zone', // More "GIS" like
-                            style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.bold, fontSize: 13),
-                          ),
+                      const Icon(Icons.my_location, size: 16, color: Color(0xFF06B6D4)),
+                      const SizedBox(width: 8),
+                      Text(
+                        _hoveredLatLng != null 
+                            ? '${_hoveredLatLng!.latitude.toStringAsFixed(5)}, ${_hoveredLatLng!.longitude.toStringAsFixed(5)}'
+                            : 'Generic Zone',
+                        style: const TextStyle(
+                          fontFamily: 'monospace', 
+                          fontWeight: FontWeight.bold, 
+                          fontSize: 12,
+                          color: Colors.white,
+                        ),
+                      ),
                     ],
                   ),
-                 
-                  // Dynamic Scale Dropdown
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text('Scale: ', style: TextStyle(color: Colors.black, fontSize: 13)),
-                      const SizedBox(width: 4),
-                      DropdownButton<String>(
-                        value: _currentScale,
-                        isDense: true,
-                        underline: Container(), // Remove default underline
-                        style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 13),
-                        items: _scaleMapping.keys.map((String scale) {
-                          return DropdownMenuItem<String>(
-                            value: scale,
-                            child: Text(scale),
-                          );
-                        }).toList(),
-                        onChanged: (String? newValue) {
-                          if (newValue != null) {
-                            setState(() {
-                              _currentScale = newValue;
-                            });
-                            final targetZoom = _scaleMapping[newValue]!;
-                            _mapController.move(_mapController.camera.center, targetZoom);
-                          }
-                        },
+                      const Text('Scale: ', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF090D16),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: Colors.white.withOpacity(0.08)),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: _currentScale,
+                            isDense: true,
+                            dropdownColor: const Color(0xFF0F172A),
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                            icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF06B6D4), size: 18),
+                            items: _scaleMapping.keys.map((String scale) {
+                              return DropdownMenuItem<String>(
+                                value: scale,
+                                child: Text(scale),
+                              );
+                            }).toList(),
+                            onChanged: (String? newValue) {
+                              if (newValue != null) {
+                                setState(() {
+                                  _currentScale = newValue;
+                                });
+                                final targetZoom = _scaleMapping[newValue]!;
+                                _mapController.move(_mapController.camera.center, targetZoom);
+                              }
+                            },
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -956,6 +958,45 @@ class _GisMapViewState extends State<GisMapView> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSidebarToggle({
+    required IconData icon,
+    required String label,
+    required bool isActive,
+    required Color activeColor,
+    required VoidCallback onTap,
+  }) {
+    return Tooltip(
+      message: label,
+      textStyle: const TextStyle(color: Colors.white, fontSize: 11),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F172A).withOpacity(0.9),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white.withOpacity(0.08)),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: isActive ? activeColor.withOpacity(0.12) : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isActive ? activeColor.withOpacity(0.3) : Colors.transparent,
+              width: 1,
+            ),
+          ),
+          child: Icon(
+            icon,
+            color: isActive ? activeColor : const Color(0xFF94A3B8),
+            size: 22,
+          ),
+        ),
       ),
     );
   }
@@ -966,86 +1007,98 @@ class _GisMapViewState extends State<GisMapView> {
       builder: (context) {
         DateTime? date = data['timestamp'] != null ? (data['timestamp'] as Timestamp).toDate() : null;
         String status = data['status'] ?? 'Pending';
-        Color statusColor = status == 'Action Taken' ? Colors.green : (status == 'Dismissed' ? Colors.red : Colors.orange);
+        Color statusColor = status == 'Action Taken' ? const Color(0xFF10B981) : (status == 'Dismissed' ? const Color(0xFFEF4444) : const Color(0xFFF59E0B));
         
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Row(
-            children: [
-              const Icon(Icons.description, color: Colors.blue),
-              const SizedBox(width: 8),
-              const Text('Detailed Incident Report'),
-            ],
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildDetailRow('Activity', data['activityType']),
-                _buildDetailRow('Vessel', data['vesselType']),
-                _buildDetailRow('Description', data['description']),
-                _buildDetailRow('Date', date != null ? "${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute}" : 'Unknown'),
-                const Divider(),
-                _buildDetailRow('Reporter', data['reporterName'] ?? 'Anonymous'),
-                if (data['isAnonymous'] == true) 
-                  const Text('(Submitted Anonymously)', style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey, fontSize: 12)),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    const Text('Status: ', style: TextStyle(fontWeight: FontWeight.bold)),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: statusColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: statusColor),
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          child: GlassCard(
+            borderRadius: 20,
+            blur: 15,
+            backgroundColor: const Color(0xFF0F172A).withOpacity(0.95),
+            borderColor: Colors.white.withOpacity(0.08),
+            padding: const EdgeInsets.all(24),
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.description, color: Color(0xFF06B6D4), size: 20),
+                      const SizedBox(width: 10),
+                      const Text(
+                        'Incident Report Details', 
+                        style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16),
                       ),
-                      child: Text(status, style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 12)),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Container(height: 1, color: Colors.white.withOpacity(0.08)),
+                  const SizedBox(height: 16),
+                  _buildDialogDetailRow('Activity', data['activityType'] ?? 'N/A'),
+                  _buildDialogDetailRow('Vessel', data['vesselType'] ?? 'N/A'),
+                  _buildDialogDetailRow('Description', data['description'] ?? 'N/A'),
+                  _buildDialogDetailRow('Date', date != null ? "${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute}" : 'Unknown'),
+                  const Divider(color: Colors.white10, height: 24),
+                  _buildDialogDetailRow('Reporter', data['reporterName'] ?? 'Anonymous'),
+                  if (data['isAnonymous'] == true) 
+                    const Padding(
+                      padding: EdgeInsets.only(top: 4.0),
+                      child: Text('(Submitted Anonymously)', style: TextStyle(fontStyle: FontStyle.italic, color: Color(0xFF64748B), fontSize: 11)),
+                    ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      const Text('Status: ', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13)),
+                      const SizedBox(width: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: statusColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: statusColor),
+                        ),
+                        child: Text(status, style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 11)),
+                      ),
+                    ],
+                  ),
+                  if (data['proofOfAction'] != null && data['proofOfAction'].toString().isNotEmpty) ...[
+                    const Divider(color: Colors.white10, height: 24),
+                    const Text('Proof of Action / Remarks:', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF10B981), fontSize: 13)),
+                    const SizedBox(height: 8),
+                    Text(data['proofOfAction'], style: const TextStyle(color: Colors.white70, fontSize: 12, height: 1.4)),
+                  ],
+                  if (data['acknowledgementMessage'] != null && data['acknowledgementMessage'].toString().isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    const Text('Official Feedback:', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF3B82F6), fontSize: 13)),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF090D16), 
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.white.withOpacity(0.04)),
+                      ),
+                      child: Text(data['acknowledgementMessage'], style: const TextStyle(fontSize: 12, color: Colors.white70, height: 1.4)),
                     ),
                   ],
-                ),
-                if (data['proofOfAction'] != null && data['proofOfAction'].toString().isNotEmpty) ...[
-                  const Divider(height: 24),
-                  const Text('Proof of Action / Authority Remarks:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
-                  const SizedBox(height: 8),
-                  Text(data['proofOfAction']),
-                ],
-                if (data['acknowledgementMessage'] != null && data['acknowledgementMessage'].toString().isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  const Text('Official Feedback:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
-                  const SizedBox(height: 4),
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(8)),
-                    child: Text(data['acknowledgementMessage'], style: const TextStyle(fontSize: 13)),
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Back to Map', style: TextStyle(color: Color(0xFF6366F1), fontWeight: FontWeight.bold)),
+                      ),
+                    ],
                   ),
                 ],
-              ],
+              ),
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Back to Map'),
-            ),
-          ],
         );
       },
-    );
-  }
-
-  Widget _buildDetailRow(String label, dynamic value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueGrey, fontSize: 12)),
-          const SizedBox(height: 2),
-          Text(value?.toString() ?? 'N/A', style: const TextStyle(fontSize: 14)),
-        ],
-      ),
     );
   }
 
@@ -1054,36 +1107,142 @@ class _GisMapViewState extends State<GisMapView> {
       onTap: () {
         showDialog(
           context: context,
-          builder: (context) => AlertDialog(
-            title: Text('🐟 Fish Concentration', style: TextStyle(color: Colors.blue.shade900)),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Species: $species', style: const TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                const Text('Availability: High 📈', style: TextStyle(color: Colors.green, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 4),
-                Text('Real-time Insight: $density'),
-                const SizedBox(height: 12),
-                const Text('Market Prospect: PREMIUM (Goa Direct)', style: TextStyle(fontSize: 10, fontStyle: FontStyle.italic)),
-              ],
+          builder: (context) => Dialog(
+            backgroundColor: Colors.transparent,
+            child: GlassCard(
+              borderRadius: 20,
+              blur: 15,
+              backgroundColor: const Color(0xFF0F172A).withOpacity(0.95),
+              borderColor: const Color(0xFF06B6D4).withOpacity(0.3),
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: const [
+                      Text('🐟', style: TextStyle(fontSize: 20)),
+                      SizedBox(width: 10),
+                      Text('Fish Concentration', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Container(height: 1, color: Colors.white.withOpacity(0.08)),
+                  const SizedBox(height: 16),
+                  _buildDialogDetailRow('Species', species),
+                  _buildDialogDetailRow('Availability', 'High 📈'),
+                  _buildDialogDetailRow('Real-time Insight', density),
+                  const Divider(color: Colors.white10, height: 24),
+                  const Text(
+                    'Market Prospect: PREMIUM (Goa Direct)', 
+                    style: TextStyle(fontSize: 10, fontStyle: FontStyle.italic, color: Color(0xFF64748B)),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      ElevatedButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF06B6D4),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        child: const Text('Close', style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-            actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))],
           ),
         );
       },
-      child: Container(
-        padding: const EdgeInsets.all(4),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.9),
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.blue.shade900, width: 2),
-          boxShadow: [BoxShadow(color: Colors.blue.withOpacity(0.3), blurRadius: 8)],
+      child: PulsingRadarMarker(
+        color: const Color(0xFF06B6D4),
+        child: Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0F172A).withOpacity(0.9),
+            shape: BoxShape.circle,
+            border: Border.all(color: const Color(0xFF06B6D4), width: 1.5),
+            boxShadow: [BoxShadow(color: const Color(0xFF06B6D4).withOpacity(0.3), blurRadius: 8)],
+          ),
+          child: const Center(child: Text('🐠', style: TextStyle(fontSize: 18))),
         ),
-        child: const Center(child: Text('🐠', style: TextStyle(fontSize: 20))),
       ),
     );
   }
 }
 
+// Stateful expanding pulse rings widget for coordinates
+class PulsingRadarMarker extends StatefulWidget {
+  final Color color;
+  final Widget child;
+  const PulsingRadarMarker({super.key, required this.color, required this.child});
+
+  @override
+  State<PulsingRadarMarker> createState() => _PulsingRadarMarkerState();
+}
+
+class _PulsingRadarMarkerState extends State<PulsingRadarMarker> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        AnimatedBuilder(
+          animation: _controller,
+          builder: (context, child) {
+            return Stack(
+              alignment: Alignment.center,
+              children: [
+                Container(
+                  width: 50 * _controller.value,
+                  height: 50 * _controller.value,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: widget.color.withOpacity(1.0 - _controller.value),
+                      width: 1.5,
+                    ),
+                    color: widget.color.withOpacity(0.12 * (1.0 - _controller.value)),
+                  ),
+                ),
+                Container(
+                  width: 80 * _controller.value,
+                  height: 80 * _controller.value,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: widget.color.withOpacity((1.0 - _controller.value) * 0.4),
+                      width: 1.0,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+        widget.child,
+      ],
+    );
+  }
+}

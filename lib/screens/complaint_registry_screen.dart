@@ -13,7 +13,7 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:record/record.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:http/http.dart' as http;
-// Note: Bypassing Firebase Storage by using Base64 encoding
+import '../widgets/glass_card.dart';
 
 class ComplaintRegistryScreen extends StatefulWidget {
   final String farmerName;
@@ -25,6 +25,8 @@ class ComplaintRegistryScreen extends StatefulWidget {
 
 class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
   final _formKey = GlobalKey<FormState>();
+  
+  int _currentStep = 0; // 0: Classification & Contact, 1: Details & Evidence, 2: Location Review & Send
   
   bool _isAnonymous = false;
   String? _selectedVesselType;
@@ -126,7 +128,6 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
     try {
       if (await _audioRecorder.hasPermission()) {
         final String path = kIsWeb ? '' : '${Directory.systemTemp.path}/complaint_audio.m4a';
-        // Optimize for size: 32kbps mono is plenty for voice and keeps Firestore doc under 1MB
         await _audioRecorder.start(
           const RecordConfig(
             encoder: AudioEncoder.aacLc,
@@ -180,16 +181,16 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
   Future<void> _pickImage() async {
     final pickedFile = await ImagePicker().pickImage(
       source: ImageSource.camera,
-      imageQuality: 15, // Aggressive compression (15%) to stay under 1MB Firestore limit
-      maxWidth: 450,    // Reduced width for smaller Base64 payload
-      maxHeight: 450,   // Reduced height
+      imageQuality: 15, 
+      maxWidth: 450,    
+      maxHeight: 450,   
     );
     if (pickedFile != null) {
       if (kIsWeb) {
         var f = await pickedFile.readAsBytes();
         setState(() {
           _webImage = f;
-          _imageFile = File('a'); // Dummy file to satisfy null check
+          _imageFile = File('a'); 
         });
       } else {
         setState(() {
@@ -205,8 +206,6 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
     setState(() => _isSearchingLocation = true);
 
     try {
-      // Using OpenStreetMap Nominatim API (Free, no API key required)
-      // Bounded roughly to Goa region for better relevance
       final url = Uri.parse('https://nominatim.openstreetmap.org/search?q=$query&format=json&addressdetails=1&countrycodes=in&viewbox=73.5,15.8,74.5,14.8&bounded=1&limit=5');
       final response = await http.get(url, headers: {'User-Agent': 'GIS_Smart_Pisciculture_App'});
       
@@ -233,7 +232,6 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
     setState(() => _isSearchingLocation = true);
     try {
       Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
-      // Reverse geocode using Nominatim
       final url = Uri.parse('https://nominatim.openstreetmap.org/reverse?lat=${position.latitude}&lon=${position.longitude}&format=json');
       final response = await http.get(url, headers: {'User-Agent': 'GIS_Smart_Pisciculture_App'});
       
@@ -246,7 +244,6 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
             'lng': position.longitude,
           };
         });
-        // Success feedback
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('📍 Location detected successfully!'), backgroundColor: Colors.green),
@@ -277,12 +274,9 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
     });
 
     try {
-      print("Starting complaint submission...");
       final String complaintId = const Uuid().v4();
       String? imageUrl;
 
-      // 1. Convert Image to Base64 (Bypass Storage)
-      print("Converting image to Base64...");
       try {
         if (kIsWeb && _webImage != null) {
           final base64String = base64Encode(_webImage!);
@@ -293,11 +287,9 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
           imageUrl = 'data:image/jpeg;base64,$base64String';
         }
       } catch (uploadError) {
-        print("Image conversion failed: $uploadError. Continuing without image.");
+        print("Image conversion failed. Continuing without image.");
       }
-      print("Image URL: $imageUrl");
 
-      // 1b. Convert Audio to Base64 (Bypass Storage)
       String? audioUrl;
       try {
         if (_audioPath != null && _audioPath!.isNotEmpty) {
@@ -312,11 +304,9 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
           audioUrl = 'data:audio/mp4;base64,$base64String';
         }
       } catch (e) {
-        print("Audio conversion failed: $e. Continuing without audio.");
+        print("Audio conversion failed. Continuing without audio.");
       }
 
-      // 2. Add AI Analysis
-      print("Analyzing complaint with AI...");
       final aiAnalysis = await AIComplaintService.analyzeComplaint({
         'activityType': _selectedActivityType,
         'vesselType': _selectedVesselType,
@@ -324,12 +314,10 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
         'location': 'Lat: ${_selectedLocationData!['lat']}, Lng: ${_selectedLocationData!['lng']} (${_selectedLocationData!['name']})',
       });
 
-      // 3. Save data to Firestore
-      print("Saving to Firestore...");
       await FirebaseFirestore.instance.collection('complaints').doc(complaintId).set({
         'id': complaintId,
         'reporterName': _isAnonymous ? 'Anonymous' : widget.farmerName,
-        'originalFarmerName': widget.farmerName, // Always link to original farmer id/name
+        'originalFarmerName': widget.farmerName, 
         'isAnonymous': _isAnonymous,
         'vesselType': _selectedVesselType,
         'activityType': _selectedActivityType,
@@ -339,20 +327,18 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
         'locationName': _selectedLocationData!['name'],
         'imageUrl': imageUrl,
         'audioUrl': audioUrl,
-        'status': 'Pending', // Pending, Reviewed, Action Taken
+        'status': 'Pending', 
         'timestamp': FieldValue.serverTimestamp(),
         if (aiAnalysis != null) 'aiAnalysis': aiAnalysis,
       });
 
       if (mounted) {
-        print("Firestore save complete. Showing success message.");
         setState(() {
           _isSuccess = true;
           _submittedComplaintId = complaintId;
         });
       }
     } catch (e) {
-       print("ERROR CAUGHT DURING SUBMISSION: $e");
        if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error submitting report: $e'), backgroundColor: Colors.red),
@@ -372,8 +358,9 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
     return DefaultTabController(
       length: 2,
       child: Scaffold(
+      backgroundColor: const Color(0xFF090D16), // Premium dark mode background
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: const Color(0xFF0F172A),
         elevation: 0,
         leading: CustomBackButton(onPressed: () {
           if (_isSuccess) {
@@ -386,6 +373,7 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
               _phoneController.clear();
               _imageFile = null;
               _webImage = null;
+              _currentStep = 0;
             });
           } else {
             Navigator.pop(context);
@@ -393,275 +381,65 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
         }),
         leadingWidth: 80,
         title: const Text(
-          'Report Incident',
-          style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
+          'Incident Command',
+          style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 18, letterSpacing: 0.5),
         ),
-        bottom: const TabBar(
-          labelColor: Colors.redAccent,
-          unselectedLabelColor: Colors.grey,
-          indicatorColor: Colors.redAccent,
-          tabs: [
-            Tab(icon: Icon(Icons.edit_note), text: "New Report"),
-            Tab(icon: Icon(Icons.history), text: "My Reports"),
-          ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(49.0),
+          child: Column(
+            children: [
+              const TabBar(
+                labelColor: Color(0xFFEF4444),
+                unselectedLabelColor: Color(0xFF64748B),
+                indicatorColor: Color(0xFFEF4444),
+                indicatorWeight: 3,
+                tabs: [
+                  Tab(icon: Icon(Icons.edit_note, size: 20), text: "New Report"),
+                  Tab(icon: Icon(Icons.history, size: 20), text: "My Reports"),
+                ],
+              ),
+              Container(
+                color: Colors.white.withOpacity(0.08),
+                height: 1.0,
+              ),
+            ],
+          ),
         ),
       ),
       body: TabBarView(
         children: [
-          // Tab 1: New Report Form
+          // Tab 1: New Report Form Wizard
           _isSuccess 
             ? _buildSuccessScreen()
             : (_isSubmitting 
-              ? const Center(child: CircularProgressIndicator())
-              : SingleChildScrollView(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildWarningBanner(),
-                        const SizedBox(height: 24),
-                        // ... (form content continues)
+              ? const Center(child: CircularProgressIndicator(color: Color(0xFFEF4444)))
+              : Column(
+                  children: [
+                    // Step Progress Indicator Bar
+                    _buildStepIndicator(),
                     
-                    // Anonymity Toggle
-                    SwitchListTile(
-                      title: const Text('Submit Anonymously', style: TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: const Text('Your name will be hidden from the authorities.'),
-                      value: _isAnonymous,
-                      activeColor: Colors.red,
-                      onChanged: (bool value) {
-                        setState(() {
-                          _isAnonymous = value;
-                        });
-                      },
-                      secondary: const Icon(Icons.privacy_tip, color: Colors.grey),
-                    ),
-                    const Divider(),
-                    
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _phoneController,
-                      keyboardType: TextInputType.phone,
-                      decoration: InputDecoration(
-                        labelText: 'Contact Number',
-                        hintText: 'e.g., 9876543210',
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                        prefixIcon: const Icon(Icons.phone),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    const Text('Vessel Information', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 12),
-                    
-                    DropdownButtonFormField<String>(
-                      isExpanded: true,
-                      decoration: InputDecoration(
-                         labelText: 'Vessel Type',
-                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                         prefixIcon: const Icon(Icons.directions_boat)
-                      ),
-                      value: _selectedVesselType,
-                      items: _vesselTypes.map((String value) {
-                        return DropdownMenuItem<String>(
-                          value: value,
-                          child: Text(value, overflow: TextOverflow.ellipsis),
-                        );
-                      }).toList(),
-                      onChanged: (newValue) => setState(() => _selectedVesselType = newValue),
-                      validator: (value) => value == null ? 'Please select a vessel type' : null,
-                    ),
-                    
-                    const SizedBox(height: 16),
-                    
-                    DropdownButtonFormField<String>(
-                      isExpanded: true,
-                      decoration: InputDecoration(
-                         labelText: 'Type of Suspicious Activity',
-                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                         prefixIcon: const Icon(Icons.warning_amber)
-                      ),
-                      value: _selectedActivityType,
-                      items: _activityTypes.map((String value) {
-                        return DropdownMenuItem<String>(
-                          value: value,
-                          child: Text(value, overflow: TextOverflow.ellipsis),
-                        );
-                      }).toList(),
-                      onChanged: (newValue) => setState(() => _selectedActivityType = newValue),
-                      validator: (value) => value == null ? 'Please select an activity type' : null,
-                    ),
-  
-                    const SizedBox(height: 16),
-                    
-                    TextFormField(
-                      controller: _descriptionController,
-                      maxLines: 4,
-                      decoration: InputDecoration(
-                        labelText: 'Additional Details / Description',
-                        alignLabelWithHint: true,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _isListening ? Icons.mic : Icons.mic_none,
-                            color: _isListening ? Colors.red : Colors.grey,
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+                        child: Form(
+                          key: _formKey,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (_currentStep == 0) _buildStep1(),
+                              if (_currentStep == 1) _buildStep2(),
+                              if (_currentStep == 2) _buildStep3(),
+                              const SizedBox(height: 24),
+                            ],
                           ),
-                          onPressed: _listenToSpeech,
-                        ),
-                      ),
-                      validator: (value) {
-                        if (value!.isEmpty && (_audioPath == null || _audioPath!.isEmpty)) {
-                          return 'Please provide a description or record voice evidence';
-                        }
-                        return null;
-                      },
-                    ),
-  
-                    const SizedBox(height: 24),
-                    const Text('Evidence', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 12),
-                    
-                    // Image Picker
-                    InkWell(
-                      onTap: _pickImage,
-                      child: Container(
-                        height: 150,
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
-                          border: Border.all(color: Colors.grey.shade300),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: (_imageFile != null || _webImage != null)
-                            ? ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: kIsWeb
-                                    ? Image.memory(_webImage!, fit: BoxFit.cover)
-                                    : Image.file(_imageFile!, fit: BoxFit.cover),
-                              )
-                            : Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.camera_alt, size: 48, color: Colors.grey.shade400),
-                                  const SizedBox(height: 8),
-                                  Text('Tap to take a photo of the vessel', style: TextStyle(color: Colors.grey.shade600))
-                                ],
-                              ),
-                      ),
-                    ),
-  
-                    const SizedBox(height: 24),
-                    const Text('Voice Evidence', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 12),
-                    
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade100,
-                        border: Border.all(color: Colors.grey.shade300),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        children: [
-                          IconButton(
-                            icon: Icon(_isRecording ? Icons.stop_circle : Icons.mic, color: _isRecording ? Colors.red : Colors.blue, size: 36),
-                            onPressed: _isRecording ? _stopRecording : _startRecording,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _isRecording ? "Recording..." : (_audioPath != null ? "Voice Evidence Recorded!" : "Tap to record voice evidence"),
-                              style: TextStyle(color: _isRecording ? Colors.red : Colors.grey.shade800, fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                          if (_audioPath != null) ...[
-                             IconButton(
-                               icon: Icon(_isPlaying ? Icons.pause_circle : Icons.play_circle, color: Colors.green, size: 36),
-                               onPressed: _playAudio,
-                             ),
-                             IconButton(
-                               icon: Icon(Icons.delete, color: Colors.red, size: 36),
-                               onPressed: _deleteAudio,
-                             ),
-                          ]
-                        ]
-                      )
-                    ),
-
-                    const SizedBox(height: 24),
-                    const Text('Location', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    
-                    Autocomplete<Map<String, dynamic>>(
-                      displayStringForOption: (option) => option['name'] as String,
-                      optionsBuilder: (TextEditingValue textEditingValue) async {
-                        return await _searchLocations(textEditingValue.text);
-                      },
-                      onSelected: (Map<String, dynamic> selection) {
-                        setState(() {
-                          _selectedLocationData = selection;
-                        });
-                      },
-                      fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
-                        // Sync controller if external selection happens (like Detect Location)
-                        if (_selectedLocationData != null && textEditingController.text != _selectedLocationData!['name']) {
-                           textEditingController.text = _selectedLocationData!['name'];
-                        }
-
-                        return TextFormField(
-                          controller: textEditingController,
-                          focusNode: focusNode,
-                          onEditingComplete: onFieldSubmitted,
-                          decoration: InputDecoration(
-                            labelText: 'Search Location',
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                            prefixIcon: const Icon(Icons.location_on),
-                            suffixIcon: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                if (_selectedLocationData != null) 
-                                  const Icon(Icons.check_circle, color: Colors.green),
-                                if (_isSearchingLocation)
-                                   const Padding(padding: EdgeInsets.all(12), child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
-                                IconButton(
-                                  icon: Icon(Icons.my_location, color: _isSearchingLocation ? Colors.blue : Colors.blueGrey),
-                                  onPressed: _isSearchingLocation ? null : _detectCurrentLocation,
-                                  tooltip: 'Use current location',
-                                ),
-                              ],
-                            ),
-                          ),
-                          onChanged: (value) {
-                             if (_selectedLocationData != null && value != _selectedLocationData!['name']) {
-                                setState(() {
-                                   _selectedLocationData = null; // Reset if they alter the selected text
-                                });
-                             }
-                          },
-                          validator: (value) => _selectedLocationData == null ? 'Please select a predefined location' : null,
-                        );
-                      },
-                    ),
-  
-                    const SizedBox(height: 32),
-                    
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: ElevatedButton.icon(
-                        onPressed: _submitComplaint,
-                        icon: const Icon(Icons.send),
-                        label: const Text('Submit Report to Authorities', style: TextStyle(fontSize: 16)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.redAccent,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
                         ),
                       ),
                     ),
+                    
+                    // Progressive Navigation Panel
+                    _buildNavigationButtons(),
                   ],
-                ),
-              ))),
+                )),
           // Tab 2: My Reports List
           _buildMyReports(),
         ],
@@ -669,6 +447,597 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
     ),
   );
 }
+
+  Widget _buildStepIndicator() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+      color: const Color(0xFF0F172A).withOpacity(0.4),
+      child: Row(
+        children: [
+          _buildStepDot(0, "Classification"),
+          _buildStepLine(0),
+          _buildStepDot(1, "Evidence"),
+          _buildStepLine(1),
+          _buildStepDot(2, "Location"),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStepDot(int stepIndex, String label) {
+    final isActive = _currentStep == stepIndex;
+    final isCompleted = _currentStep > stepIndex;
+    final Color dotColor = isCompleted 
+        ? const Color(0xFF10B981) // Green for complete
+        : (isActive ? const Color(0xFFEF4444) : const Color(0xFF64748B));
+    
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          width: 24,
+          height: 24,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: dotColor.withOpacity(0.12),
+            border: Border.all(color: dotColor, width: 2),
+            boxShadow: isActive ? [
+              BoxShadow(color: dotColor.withOpacity(0.3), blurRadius: 8, spreadRadius: 1),
+            ] : null,
+          ),
+          alignment: Alignment.center,
+          child: isCompleted 
+              ? const Icon(Icons.check, size: 12, color: Color(0xFF10B981))
+              : Text(
+                  "${stepIndex + 1}", 
+                  style: TextStyle(color: dotColor, fontSize: 10, fontWeight: FontWeight.bold),
+                ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 9, 
+            fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+            color: isActive ? Colors.white : const Color(0xFF64748B),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStepLine(int afterStep) {
+    final isPassed = _currentStep > afterStep;
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 14.0),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 400),
+          height: 2,
+          color: isPassed ? const Color(0xFF10B981) : Colors.white.withOpacity(0.08),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStep1() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildWarningBanner(),
+        const SizedBox(height: 20),
+        
+        GlassCard(
+          borderRadius: 16,
+          blur: 10,
+          backgroundColor: const Color(0xFF1E293B).withOpacity(0.4),
+          borderColor: Colors.white.withOpacity(0.06),
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "Anonymity Settings",
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+              const SizedBox(height: 12),
+              SwitchListTile(
+                title: const Text('Submit Anonymously', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 14)),
+                subtitle: const Text(
+                  'Your name & details will be entirely hidden from authorities.',
+                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                ),
+                contentPadding: EdgeInsets.zero,
+                value: _isAnonymous,
+                activeColor: const Color(0xFFEF4444),
+                onChanged: (bool value) {
+                  setState(() {
+                    _isAnonymous = value;
+                  });
+                },
+                secondary: const Icon(Icons.privacy_tip, color: Color(0xFF06B6D4)),
+              ),
+              if (!_isAnonymous) ...[
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _phoneController,
+                  keyboardType: TextInputType.phone,
+                  style: const TextStyle(color: Colors.white, fontSize: 14),
+                  decoration: InputDecoration(
+                    labelText: 'Contact Number',
+                    labelStyle: const TextStyle(color: Color(0xFF64748B)),
+                    hintText: 'e.g., 9876543210',
+                    hintStyle: const TextStyle(color: Color(0xFF334155)),
+                    filled: true,
+                    fillColor: const Color(0xFF090D16),
+                    prefixIcon: const Icon(Icons.phone, color: Color(0xFF6366F1), size: 20),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.white.withOpacity(0.04))),
+                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF6366F1))),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        
+        const SizedBox(height: 20),
+        
+        GlassCard(
+          borderRadius: 16,
+          blur: 10,
+          backgroundColor: const Color(0xFF1E293B).withOpacity(0.4),
+          borderColor: Colors.white.withOpacity(0.06),
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "Vessel & Activity Category",
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                isExpanded: true,
+                dropdownColor: const Color(0xFF0F172A),
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+                decoration: InputDecoration(
+                   labelText: 'Vessel Type',
+                   labelStyle: const TextStyle(color: Color(0xFF64748B)),
+                   filled: true,
+                   fillColor: const Color(0xFF090D16),
+                   prefixIcon: const Icon(Icons.directions_boat, color: Color(0xFF06B6D4), size: 20),
+                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                   enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.white.withOpacity(0.04))),
+                ),
+                value: _selectedVesselType,
+                items: _vesselTypes.map((String value) {
+                  return DropdownMenuItem<String>(
+                    value: value,
+                    child: Text(value, overflow: TextOverflow.ellipsis),
+                  );
+                }).toList(),
+                onChanged: (newValue) => setState(() => _selectedVesselType = newValue),
+                validator: (value) => value == null ? 'Please select a vessel type' : null,
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                isExpanded: true,
+                dropdownColor: const Color(0xFF0F172A),
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+                decoration: InputDecoration(
+                   labelText: 'Suspicious Activity Type',
+                   labelStyle: const TextStyle(color: Color(0xFF64748B)),
+                   filled: true,
+                   fillColor: const Color(0xFF090D16),
+                   prefixIcon: const Icon(Icons.warning_amber, color: Color(0xFFEF4444), size: 20),
+                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                   enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.white.withOpacity(0.04))),
+                ),
+                value: _selectedActivityType,
+                items: _activityTypes.map((String value) {
+                  return DropdownMenuItem<String>(
+                    value: value,
+                    child: Text(value, overflow: TextOverflow.ellipsis),
+                  );
+                }).toList(),
+                onChanged: (newValue) => setState(() => _selectedActivityType = newValue),
+                validator: (value) => value == null ? 'Please select an activity type' : null,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStep2() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        GlassCard(
+          borderRadius: 16,
+          blur: 10,
+          backgroundColor: const Color(0xFF1E293B).withOpacity(0.45),
+          borderColor: Colors.white.withOpacity(0.06),
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "Incident Narrative",
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _descriptionController,
+                maxLines: 4,
+                style: const TextStyle(color: Colors.white, fontSize: 13, height: 1.4),
+                decoration: InputDecoration(
+                  labelText: 'Narrative Description',
+                  labelStyle: const TextStyle(color: Color(0xFF64748B)),
+                  alignLabelWithHint: true,
+                  filled: true,
+                  fillColor: const Color(0xFF090D16),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.white.withOpacity(0.04))),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF6366F1))),
+                  suffixIcon: Container(
+                    margin: const EdgeInsets.only(top: 8, right: 8),
+                    decoration: BoxDecoration(
+                      color: _isListening ? const Color(0xFFEF4444).withOpacity(0.15) : Colors.white.withOpacity(0.03),
+                      shape: BoxShape.circle,
+                    ),
+                    child: IconButton(
+                      icon: Icon(
+                        _isListening ? Icons.mic : Icons.mic_none,
+                        color: _isListening ? const Color(0xFFEF4444) : const Color(0xFF06B6D4),
+                        size: 20,
+                      ),
+                      onPressed: _listenToSpeech,
+                    ),
+                  ),
+                ),
+                validator: (value) {
+                  if (value!.isEmpty && (_audioPath == null || _audioPath!.isEmpty)) {
+                    return 'Please provide a description or record voice evidence';
+                  }
+                  return null;
+                },
+              ),
+            ],
+          ),
+        ),
+        
+        const SizedBox(height: 20),
+        
+        // Custom Glass Polaroid Card for image evidence
+        const Text(
+          "Photo Evidence (Polaroid Capture)",
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+        ),
+        const SizedBox(height: 10),
+        
+        Center(
+          child: InkWell(
+            onTap: _pickImage,
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              width: 250,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.35),
+                    blurRadius: 15,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    height: 180,
+                    width: double.infinity,
+                    color: const Color(0xFF090D16),
+                    child: (_imageFile != null || _webImage != null)
+                        ? kIsWeb
+                            ? Image.memory(_webImage!, fit: BoxFit.cover)
+                            : Image.file(_imageFile!, fit: BoxFit.cover)
+                        : Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: const [
+                              Icon(Icons.camera_alt, size: 40, color: Color(0xFF64748B)),
+                              SizedBox(height: 8),
+                              Text(
+                                'Tap to take picture', 
+                                style: TextStyle(color: Color(0xFF64748B), fontSize: 11, fontWeight: FontWeight.bold),
+                              )
+                            ],
+                          ),
+                  ),
+                  const SizedBox(height: 14),
+                  const Text(
+                    "EVIDENCE PHOTO",
+                    style: TextStyle(
+                      fontFamily: 'Courier', 
+                      fontWeight: FontWeight.bold, 
+                      fontSize: 11, 
+                      color: Colors.black54,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                ],
+              ),
+            ),
+          ),
+        ),
+        
+        const SizedBox(height: 20),
+        
+        const Text("Voice Audio Evidence", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
+        const SizedBox(height: 10),
+        
+        GlassCard(
+          borderRadius: 16,
+          blur: 10,
+          backgroundColor: const Color(0xFF1E293B).withOpacity(0.4),
+          borderColor: Colors.white.withOpacity(0.06),
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              IconButton(
+                icon: Icon(
+                  _isRecording ? Icons.stop_circle : Icons.mic, 
+                  color: _isRecording ? const Color(0xFFEF4444) : const Color(0xFF3B82F6), 
+                  size: 34,
+                ),
+                onPressed: _isRecording ? _stopRecording : _startRecording,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _isRecording ? "Recording Audio..." : (_audioPath != null ? "Voice Evidence Captured!" : "Secure Voice Memo"),
+                      style: TextStyle(
+                        color: _isRecording ? const Color(0xFFEF4444) : Colors.white, 
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _isRecording ? "Authorities are listening..." : "Tap to speak and record raw narrative details",
+                      style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
+                    ),
+                  ],
+                ),
+              ),
+              if (_audioPath != null) ...[
+                 IconButton(
+                   icon: Icon(_isPlaying ? Icons.pause_circle : Icons.play_circle, color: const Color(0xFF10B981), size: 32),
+                   onPressed: _playAudio,
+                 ),
+                 IconButton(
+                   icon: const Icon(Icons.delete, color: Color(0xFFEF4444), size: 30),
+                   onPressed: _deleteAudio,
+                 ),
+              ]
+            ]
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStep3() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        GlassCard(
+          borderRadius: 16,
+          blur: 10,
+          backgroundColor: const Color(0xFF1E293B).withOpacity(0.4),
+          borderColor: Colors.white.withOpacity(0.06),
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "Incident Geofencing",
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+              const SizedBox(height: 14),
+              Autocomplete<Map<String, dynamic>>(
+                displayStringForOption: (option) => option['name'] as String,
+                optionsBuilder: (TextEditingValue textEditingValue) async {
+                  return await _searchLocations(textEditingValue.text);
+                },
+                onSelected: (Map<String, dynamic> selection) {
+                  setState(() {
+                    _selectedLocationData = selection;
+                  });
+                },
+                fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
+                  if (_selectedLocationData != null && textEditingController.text != _selectedLocationData!['name']) {
+                     textEditingController.text = _selectedLocationData!['name'];
+                  }
+
+                  return TextFormField(
+                    controller: textEditingController,
+                    focusNode: focusNode,
+                    onEditingComplete: onFieldSubmitted,
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    decoration: InputDecoration(
+                      labelText: 'Search Location Coordinates',
+                      labelStyle: const TextStyle(color: Color(0xFF64748B)),
+                      filled: true,
+                      fillColor: const Color(0xFF090D16),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.white.withOpacity(0.04))),
+                      prefixIcon: const Icon(Icons.location_on, color: Color(0xFF06B6D4), size: 20),
+                      suffixIcon: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (_selectedLocationData != null) 
+                            const Icon(Icons.check_circle, color: Color(0xFF10B981), size: 20),
+                          if (_isSearchingLocation)
+                             const Padding(padding: EdgeInsets.all(12), child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF06B6D4)))),
+                          IconButton(
+                            icon: Icon(Icons.my_location, color: _isSearchingLocation ? const Color(0xFF3B82F6) : const Color(0xFF94A3B8), size: 20),
+                            onPressed: _isSearchingLocation ? null : _detectCurrentLocation,
+                            tooltip: 'Use current location',
+                          ),
+                        ],
+                      ),
+                    ),
+                    onChanged: (value) {
+                       if (_selectedLocationData != null && value != _selectedLocationData!['name']) {
+                          setState(() {
+                             _selectedLocationData = null; 
+                          });
+                       }
+                    },
+                    validator: (value) => _selectedLocationData == null ? 'Please select a predefined location' : null,
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+        
+        const SizedBox(height: 20),
+        
+        const Text("Review Summary", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
+        const SizedBox(height: 10),
+        
+        GlassCard(
+          borderRadius: 16,
+          blur: 10,
+          backgroundColor: const Color(0xFF1E293B).withOpacity(0.2),
+          borderColor: Colors.white.withOpacity(0.04),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              _buildReviewRow("Submission type:", _isAnonymous ? "Anonymous Report" : "Standard Profile"),
+              _buildReviewRow("Activity Type:", _selectedActivityType ?? "Not Specified"),
+              _buildReviewRow("Vessel Identified:", _selectedVesselType ?? "Not Specified"),
+              _buildReviewRow("Narrative Info:", _descriptionController.text.isNotEmpty ? "Provided (${_descriptionController.text.length} chars)" : "Audio Evidence Only"),
+              _buildReviewRow("GPS Lock:", _selectedLocationData != null ? "VALID COORDINATES" : "NOT SELECTED", isAccent: true),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildReviewRow(String label, String value, {bool isAccent = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(color: Color(0xFF64748B), fontSize: 12)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              value, 
+              style: TextStyle(
+                color: isAccent ? const Color(0xFF10B981) : Colors.white, 
+                fontWeight: FontWeight.bold, 
+                fontSize: 12,
+              ),
+              textAlign: TextAlign.end,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNavigationButtons() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F172A),
+        border: Border(top: BorderSide(color: Colors.white.withOpacity(0.08))),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          // Back Button
+          if (_currentStep > 0)
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(right: 12.0),
+                child: OutlinedButton(
+                  onPressed: () {
+                    setState(() {
+                      _currentStep--;
+                    });
+                  },
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF94A3B8),
+                    side: BorderSide(color: Colors.white.withOpacity(0.08)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: const Text("Previous", style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ),
+            )
+          else
+            const Spacer(),
+            
+          // Next / Submit Button
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(10),
+                gradient: LinearGradient(
+                  colors: _currentStep == 2 
+                      ? [const Color(0xFFEF4444), const Color(0xFFDC2626)]
+                      : [const Color(0xFF6366F1), const Color(0xFF4F46E5)],
+                ),
+              ),
+              child: ElevatedButton(
+                onPressed: () {
+                  if (_currentStep < 2) {
+                    if (_formKey.currentState!.validate() || _currentStep == 1) {
+                      setState(() {
+                        _currentStep++;
+                      });
+                    }
+                  } else {
+                    _submitComplaint();
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  foregroundColor: Colors.white,
+                  shadowColor: Colors.transparent,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                child: Text(
+                  _currentStep == 2 ? "File Complaint" : "Continue", 
+                  style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildMyReports() {
     return StreamBuilder<QuerySnapshot>(
@@ -678,32 +1047,34 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(child: CircularProgressIndicator(color: Color(0xFFEF4444)));
         }
         if (snapshot.hasError) {
-          return Center(child: Text('Error: ${snapshot.error}'));
+          return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.redAccent)));
         }
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const Center(
+          return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.history, size: 64, color: Colors.grey),
-                SizedBox(height: 16),
-                Text('You haven\'t submitted any reports yet.', style: TextStyle(color: Colors.grey)),
+                Icon(Icons.history, size: 64, color: Colors.white.withOpacity(0.12)),
+                const SizedBox(height: 16),
+                const Text(
+                  'No reports recorded yet.', 
+                  style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold),
+                ),
               ],
             ),
           );
         }
 
-        // Sort in-memory to avoid requiring a composite index
         final docs = snapshot.data!.docs;
         docs.sort((a, b) {
           final aTime = (a.data() as Map<String, dynamic>)['timestamp'] as Timestamp?;
           final bTime = (b.data() as Map<String, dynamic>)['timestamp'] as Timestamp?;
           if (aTime == null) return 1;
           if (bTime == null) return -1;
-          return bTime.compareTo(aTime); // Descending
+          return bTime.compareTo(aTime); 
         });
 
         return ListView.builder(
@@ -720,97 +1091,103 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
 
   Widget _buildAcknowledgementCard(Map<String, dynamic> data) {
     String status = data['status'] ?? 'Pending';
-    Color statusColor = status == 'Action Taken' ? Colors.green : (status == 'Dismissed' ? Colors.red : Colors.orange);
+    Color statusColor = status == 'Action Taken' 
+        ? const Color(0xFF10B981) // Emerald
+        : (status == 'Dismissed' ? const Color(0xFFEF4444) : const Color(0xFFF59E0B));
     DateTime? date = data['timestamp'] != null ? (data['timestamp'] as Timestamp).toDate() : null;
 
-    return Card(
+    return GlassCard(
+      borderRadius: 16,
+      blur: 10,
+      backgroundColor: const Color(0xFF1E293B).withOpacity(0.4),
+      borderColor: statusColor.withOpacity(0.2),
+      padding: const EdgeInsets.all(16),
       margin: const EdgeInsets.only(bottom: 16),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    data['activityType'] ?? 'Unknown Activity',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                  ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  data['activityType'] ?? 'Unknown Activity',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white),
+                  overflow: TextOverflow.ellipsis,
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: statusColor),
-                  ),
-                  child: Text(
-                    status,
-                    style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 12),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            if (date != null)
-              Text(
-                "Submitted on: ${date.day}/${date.month}/${date.year}",
-                style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
               ),
-            const Divider(height: 24),
-            if (data['acknowledgementMessage'] != null) ...[
-              const Text(
-                "Message from Authority:",
-                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blueAccent, fontSize: 14),
-              ),
-              const SizedBox(height: 8),
+              const SizedBox(width: 8),
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(8),
+                  color: statusColor.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: statusColor.withOpacity(0.3), width: 1),
                 ),
                 child: Text(
-                  data['acknowledgementMessage'],
-                  style: const TextStyle(height: 1.4),
+                  status,
+                  style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 9, letterSpacing: 0.5),
                 ),
               ),
-            ] else ...[
-              const Row(
-                children: [
-                   Icon(Icons.hourglass_empty, size: 16, color: Colors.grey),
-                   SizedBox(width: 8),
-                   Text("Waiting for authority response...", style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic)),
-                ],
-              ),
             ],
+          ),
+          const SizedBox(height: 8),
+          if (date != null)
+            Text(
+              "Submitted: ${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute}",
+              style: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+            ),
+          const Divider(height: 24, color: Colors.white10),
+          if (data['acknowledgementMessage'] != null) ...[
+            const Text(
+              "Message from Authority:",
+              style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF3B82F6), fontSize: 12),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(10),
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: const Color(0xFF090D16),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.white.withOpacity(0.04)),
+              ),
+              child: Text(
+                data['acknowledgementMessage'],
+                style: const TextStyle(color: Colors.white70, fontSize: 12, height: 1.4),
+              ),
+            ),
+          ] else ...[
+            const Row(
+              children: [
+                 Icon(Icons.hourglass_empty, size: 14, color: Color(0xFF64748B)),
+                 SizedBox(width: 8),
+                 Text("Pending official review...", style: TextStyle(color: Color(0xFF64748B), fontStyle: FontStyle.italic, fontSize: 11)),
+              ],
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
 
   Widget _buildWarningBanner() {
-// ... existing banner widget ...
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.amber.shade50,
-        borderRadius: BorderRadius.circular(8),
-        border: Border(left: BorderSide(color: Colors.amber.shade700, width: 4)),
+        color: const Color(0xFFFEF3C7).withOpacity(0.03),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFD97706).withOpacity(0.2)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.shield, color: Colors.amber.shade700),
+          const Icon(Icons.shield, color: Color(0xFFF59E0B), size: 20),
           const SizedBox(width: 12),
           const Expanded(
             child: Text(
               'Your safety is our priority. If you feel threatened, please submit the report anonymously. Do not approach suspicious vessels directly.',
-              style: TextStyle(height: 1.4),
+              style: TextStyle(color: Color(0xFFF59E0B), height: 1.4, fontSize: 11),
             ),
           )
         ],
@@ -821,53 +1198,62 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
   Widget _buildSuccessScreen() {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.check_circle, color: Colors.green, size: 80),
-            const SizedBox(height: 24),
-            const Text(
-              'Thank you for reporting.',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Your complaint has been recorded and will be reviewed by the authorities. You can track progress in the "My Reports" tab.',
-              style: TextStyle(fontSize: 16, color: Colors.grey.shade700, height: 1.5),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 32),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade300)
+        padding: const EdgeInsets.all(28.0),
+        child: GlassCard(
+          borderRadius: 24,
+          blur: 15,
+          backgroundColor: const Color(0xFF1E293B).withOpacity(0.4),
+          borderColor: Colors.white.withOpacity(0.08),
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.check_circle_outline, color: Color(0xFF10B981), size: 76),
+              const SizedBox(height: 20),
+              const Text(
+                'Report Filed Successfully',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 0.5),
+                textAlign: TextAlign.center,
               ),
-              child: Column(
-                children: [
-                  Text('Complaint ID:', style: TextStyle(color: Colors.grey.shade600)),
-                  const SizedBox(height: 4),
-                  Text(
-                    _submittedComplaintId ?? 'Unknown',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                  ),
-                  const Divider(height: 24),
-                  Text('Status:', style: TextStyle(color: Colors.grey.shade600)),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Pending Review',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.orange),
-                  ),
-                ],
+              const SizedBox(height: 12),
+              const Text(
+                'Your complaint has been encrypted and recorded securely. Authorities have been alerted on their GIS dashboard. Monitor status in the history tab.',
+                style: TextStyle(fontSize: 13, color: Color(0xFF94A3B8), height: 1.5),
+                textAlign: TextAlign.center,
               ),
-            ),
-          ],
+              const SizedBox(height: 24),
+              Container(
+                padding: const EdgeInsets.all(16),
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF090D16),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white.withOpacity(0.04))
+                ),
+                child: Column(
+                  children: [
+                    const Text('Incident Identifier:', style: TextStyle(color: Color(0xFF64748B), fontSize: 11, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 6),
+                    SelectableText(
+                      _submittedComplaintId ?? 'Unknown',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF06B6D4), fontFamily: 'monospace'),
+                      textAlign: TextAlign.center,
+                    ),
+                    const Divider(height: 24, color: Colors.white10),
+                    const Text('Initial Status:', style: TextStyle(color: Color(0xFF64748B), fontSize: 11, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'PENDING EXECUTIVE REVIEW',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFFF59E0B), letterSpacing: 0.5),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
-
