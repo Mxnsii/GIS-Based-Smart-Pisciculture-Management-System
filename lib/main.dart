@@ -11,7 +11,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
-import 'screens/gis_map_web_view_web.dart' if (dart.library.html) 'screens/gis_map_web_view_web.dart';
+// Conditional imports for web platform
+import 'screens/gis_map_web_view_web_stub.dart' if (dart.library.html) 'screens/gis_map_web_view_web.dart';
 import 'src/web_message_listener_stub.dart' if (dart.library.html) 'src/web_message_listener_web.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();

@@ -4,10 +4,9 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:convert';
 
-// Conditional import for posting messages to iframe on web
+// Conditional imports for web platform
 import '../src/html_bridge_stub.dart' if (dart.library.html) '../src/html_bridge_web.dart';
 import '../widgets/custom_back_button.dart';
-import 'gis_map_web_view_web.dart' if (dart.library.html) 'gis_map_web_view_web.dart';
 
 class GisMapView extends StatefulWidget {
   final double? initialLat;
@@ -95,23 +94,60 @@ class _GisMapViewState extends State<GisMapView> {
         postMessageToIframe(payload);
       } else {
         // Inject JS to add markers into the Leaflet map inside WebView
-        final js = "(function(){
-          try{var data = JSON.parse('" + payload.replaceAll("'", "\\'") + "');
-          if(!window.flutterMarkersLayer){ window.flutterMarkersLayer = L.layerGroup().addTo(map); }
-          window.flutterMarkersLayer.clearLayers();
-          data.farms.forEach(function(f){
-            if(!f.lat || !f.lng) return;
-            var color = (f.status === 'Active')? 'green' : (f.status === 'Pending Approval'? 'orange' : (f.status === 'Rejected'? 'red' : 'gray'));
-            var m = L.circleMarker([f.lat, f.lng], {radius:7, color: color, fillColor: color, fillOpacity:0.9}).addTo(window.flutterMarkersLayer);
-            var popup = '<div><strong>' + (f.name||'') + '</strong><br/>' + (f.owner||'') + '<br/><small>' + (f.status||'') + '</small><br/><button onclick="window.location.href=\'app://farm/' + (f.id||'') + '\'">VIEW MORE DETAILS</button></div>';
-            m.bindPopup(popup);
-          });
-          // complaints as red small markers
-          if(!window.flutterComplaintsLayer){ window.flutterComplaintsLayer = L.layerGroup().addTo(map); }
-          window.flutterComplaintsLayer.clearLayers();
-          data.complaints.forEach(function(c){ if(!c.lat||!c.lng) return; var cm = L.circleMarker([c.lat,c.lng],{radius:6, color:'purple', fillColor:'purple', fillOpacity:0.8}).addTo(window.flutterComplaintsLayer); cm.bindPopup('<b>Activity:</b> '+(c.activityType||'') + '<br/>' + (c.description||'')); });
-          }catch(e){console.error(e);}
-        })();";
+        final escapedPayload = payload.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
+        final js = '''
+          (function() {
+            try {
+              var data = JSON.parse("$escapedPayload");
+              
+              // Create/clear farms layer
+              if (!window.flutterMarkersLayer) {
+                window.flutterMarkersLayer = L.layerGroup().addTo(map);
+              }
+              window.flutterMarkersLayer.clearLayers();
+              
+              // Add farm markers
+              data.farms.forEach(function(f) {
+                if (!f.lat || !f.lng) return;
+                var color = (f.status === 'Active') ? 'green' : 
+                           (f.status === 'Pending Approval') ? 'orange' : 
+                           (f.status === 'Rejected') ? 'red' : 'gray';
+                var m = L.circleMarker([f.lat, f.lng], {
+                  radius: 7,
+                  color: color,
+                  fillColor: color,
+                  fillOpacity: 0.9
+                }).addTo(window.flutterMarkersLayer);
+                
+                var popup = '<div><strong>' + (f.name || '') + '</strong><br/>' +
+                           (f.owner || '') + '<br/><small>' + (f.status || '') +
+                           '</small><br/><button onclick="window.location.href=\\'app://farm/' +
+                           (f.id || '') + '\\'">VIEW MORE DETAILS</button></div>';
+                m.bindPopup(popup);
+              });
+              
+              // Create/clear complaints layer
+              if (!window.flutterComplaintsLayer) {
+                window.flutterComplaintsLayer = L.layerGroup().addTo(map);
+              }
+              window.flutterComplaintsLayer.clearLayers();
+              
+              // Add complaint markers
+              data.complaints.forEach(function(c) {
+                if (!c.lat || !c.lng) return;
+                var cm = L.circleMarker([c.lat, c.lng], {
+                  radius: 6,
+                  color: 'purple',
+                  fillColor: 'purple',
+                  fillOpacity: 0.8
+                }).addTo(window.flutterComplaintsLayer);
+                cm.bindPopup('<b>Activity:</b> ' + (c.activityType || '') + '<br/>' + (c.description || ''));
+              });
+            } catch (e) {
+              console.error('Error injecting markers:', e);
+            }
+          })();
+        ''';
 
         await _webViewController.runJavaScript(js);
       }
@@ -128,7 +164,7 @@ class _GisMapViewState extends State<GisMapView> {
         appBar: AppBar(
           title: const Text('GIS Map - Aquaculture Management'),
           backgroundColor: Colors.blueGrey.shade900,
-          leading: widget.showBackButton ? const CustomBackButton() : null,
+          leading: widget.showBackButton ? CustomBackButton(onPressed: () => Navigator.pop(context)) : null,
           elevation: 0,
         ),
         body: const GisMapWebViewWidget(),
@@ -140,7 +176,7 @@ class _GisMapViewState extends State<GisMapView> {
       appBar: AppBar(
         title: const Text('GIS Map - Aquaculture Management'),
         backgroundColor: Colors.blueGrey.shade900,
-        leading: widget.showBackButton ? const CustomBackButton() : null,
+        leading: widget.showBackButton ? CustomBackButton(onPressed: () => Navigator.pop(context)) : null,
         actions: [
           if (!_isMapLoaded)
             const Padding(
