@@ -11,6 +11,10 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
+import 'screens/gis_map_web_view_web.dart' if (dart.library.html) 'screens/gis_map_web_view_web.dart';
+import 'src/web_message_listener_stub.dart' if (dart.library.html) 'src/web_message_listener_web.dart';
+
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -20,6 +24,12 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Register web platform views for GIS map on web platform
+  if (kIsWeb) {
+    registerGisMapViewFactory();
+    registerMessageListener(navigatorKey);
+  }
 
   try {
     await dotenv.load(fileName: ".env");
@@ -65,6 +75,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'AgriConnect',
+      navigatorKey: navigatorKey,
       theme: AppTheme.lightTheme.copyWith(
         textTheme: GoogleFonts.latoTextTheme(
           Theme.of(context).textTheme,
