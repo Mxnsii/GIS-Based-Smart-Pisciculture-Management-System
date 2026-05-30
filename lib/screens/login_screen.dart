@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../widgets/custom_text_field.dart';
 import 'dashboard_screen.dart';
 import '../services/auth_service.dart';
 import 'package:aqua_app/screens/farmer_screen.dart';
 import 'chatbot_screen.dart';
-import '../widgets/glass_card.dart';
-import '../widgets/swimming_fish_background.dart';
-
-
+import '../widgets/ocean_glass_card.dart';
+import '../widgets/master_ocean_background.dart';
+import '../theme/app_theme.dart';
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -109,19 +109,14 @@ if (_isAuthority) {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SwimmingFishBackground(
-        fishCount: 95,
+      body: MasterOceanBackground(
         child: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24.0),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 420),
-              child: GlassCard(
+              child: OceanGlassCard(
                 borderRadius: 24,
-                blur: 16,
-                backgroundColor: const Color(0x6F0F172A), // Premium translucent dark slate navy (frosted glass)
-                borderColor: Colors.indigoAccent.withOpacity(0.25),
-                borderWidth: 1.5,
                 padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 36),
                 child: Form(
                   key: _formKey,
@@ -131,10 +126,10 @@ if (_isAuthority) {
                     children: [
                       Text(
                         _isLogin ? 'Welcome Back' : 'Create Account',
-                        style: const TextStyle(
-                          fontSize: 26,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                        style: GoogleFonts.inter(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.textPrimary,
                           letterSpacing: 0.5,
                         ),
                         textAlign: TextAlign.center,
@@ -142,9 +137,10 @@ if (_isAuthority) {
                       const SizedBox(height: 8),
                       Text(
                         _isLogin ? 'Sign in to access GIS Smart Pisciculture' : 'Register to manage smart aqua assets',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: Color(0xFF94A3B8),
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w500,
                         ),
                         textAlign: TextAlign.center,
                       ),
@@ -156,12 +152,12 @@ if (_isAuthority) {
                           ButtonSegment<bool>(
                             value: true,
                             label: Text('Authority'),
-                            icon: Icon(Icons.admin_panel_settings),
+                            icon: Icon(Icons.admin_panel_settings_rounded),
                           ),
                           ButtonSegment<bool>(
                             value: false,
                             label: Text('Farmer'),
-                            icon: Icon(Icons.set_meal),
+                            icon: Icon(Icons.set_meal_rounded),
                           ),
                         ],
                         selected: {_isAuthority},
@@ -170,7 +166,20 @@ if (_isAuthority) {
                             _isAuthority = newSelection.first;
                           });
                         },
-                        style: const ButtonStyle(
+                        style: ButtonStyle(
+                          backgroundColor: WidgetStateProperty.resolveWith<Color>((states) {
+                            if (states.contains(WidgetState.selected)) {
+                              return AppColors.primary;
+                            }
+                            return AppColors.card;
+                          }),
+                          foregroundColor: WidgetStateProperty.resolveWith<Color>((states) {
+                            if (states.contains(WidgetState.selected)) {
+                              return Colors.white;
+                            }
+                            return AppColors.textPrimary;
+                          }),
+                          textStyle: WidgetStatePropertyAll(GoogleFonts.inter(fontWeight: FontWeight.w700)),
                           visualDensity: VisualDensity.comfortable,
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
@@ -262,9 +271,31 @@ if (_isAuthority) {
 
                       const SizedBox(height: 24),
 
-                      ElevatedButton(
-                        onPressed: _submit,
-                        child: Text(_isLogin ? 'Login' : 'Register'),
+                      Container(
+                        height: 52,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(colors: AppColors.oceanGradient),
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.primary.withOpacity(0.3),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ]
+                        ),
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.transparent,
+                            shadowColor: Colors.transparent,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          ),
+                          onPressed: _submit,
+                          child: Text(
+                            _isLogin ? 'Login' : 'Register',
+                            style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 16, color: Colors.white),
+                          ),
+                        ),
                       ),
 
                       const SizedBox(height: 16),
@@ -283,9 +314,9 @@ if (_isAuthority) {
                             );
                           }
                         },
-                        child: const Text(
+                        child: Text(
                           'Continue as Guest',
-                          style: TextStyle(color: Color(0xFF94A3B8), decoration: TextDecoration.underline),
+                          style: GoogleFonts.inter(color: AppColors.textSecondary, fontWeight: FontWeight.w600, decoration: TextDecoration.underline),
                         ),
                       ),
 
@@ -299,7 +330,7 @@ if (_isAuthority) {
                           _isLogin
                               ? 'Don\'t have an account? Register'
                               : 'Already have an account? Login',
-                          style: const TextStyle(color: Colors.indigoAccent),
+                          style: GoogleFonts.inter(color: AppColors.primary, fontWeight: FontWeight.w700),
                         ),
                       ),
                     ],

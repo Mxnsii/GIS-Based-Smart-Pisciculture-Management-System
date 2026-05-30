@@ -8,6 +8,8 @@ import '../services/gis_service.dart'; // Import the service
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_map_marker_cluster/flutter_map_marker_cluster.dart';
 import '../widgets/glass_card.dart';
+import '../widgets/ocean_glass_card.dart';
+import '../theme/app_theme.dart';
 
 class GisMapView extends StatefulWidget {
   final double? initialLat;
@@ -387,11 +389,9 @@ class _GisMapViewState extends State<GisMapView> {
                 context: context,
                 builder: (context) => Dialog(
                   backgroundColor: Colors.transparent,
-                  child: GlassCard(
+                  child: OceanGlassCard(
                     borderRadius: 20,
-                    blur: 15,
-                    backgroundColor: const Color(0xFF0F172A).withOpacity(0.95),
-                    borderColor: statusColor.withOpacity(0.3),
+                    margin: EdgeInsets.zero,
                     padding: const EdgeInsets.all(24),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -403,7 +403,7 @@ class _GisMapViewState extends State<GisMapView> {
                             Expanded(
                               child: Text(
                                 farm['name'] ?? 'Unknown Farm',
-                                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16),
+                                style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary, fontSize: 16),
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -422,7 +422,7 @@ class _GisMapViewState extends State<GisMapView> {
                           ],
                         ),
                         const SizedBox(height: 16),
-                        Container(height: 1, color: Colors.white.withOpacity(0.08)),
+                        Container(height: 1, color: AppColors.divider),
                         const SizedBox(height: 16),
                         _buildDialogDetailRow('Owner', farm['owner'] ?? 'Unknown'),
                         _buildDialogDetailRow('License', farm['license'] ?? 'N/A'),
@@ -433,7 +433,7 @@ class _GisMapViewState extends State<GisMapView> {
                           children: [
                             TextButton(
                               onPressed: () => Navigator.pop(context),
-                              child: const Text('Close', style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
+                              child: Text('Close', style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.bold)),
                             ),
                             const SizedBox(width: 12),
                             if ((farm['status'] ?? '') != 'Inactive')
@@ -448,7 +448,7 @@ class _GisMapViewState extends State<GisMapView> {
                                   );
                                 },
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF6366F1),
+                                  backgroundColor: AppColors.primary,
                                   foregroundColor: Colors.white,
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -505,8 +505,8 @@ class _GisMapViewState extends State<GisMapView> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
-          Text(value, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500)),
+          Text(label, style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+          Text(value, style: TextStyle(color: AppColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w500)),
         ],
       ),
     );
@@ -519,14 +519,14 @@ class _GisMapViewState extends State<GisMapView> {
         : const LatLng(15.4989, 73.8278);
 
     return Scaffold(
-      backgroundColor: const Color(0xFF090D16),
+      backgroundColor: const Color(0xFFF1F5F9),
       appBar: AppBar(
         automaticallyImplyLeading: false,
         title: const Text(
           'GIS Map View',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+          style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 18),
         ),
-        backgroundColor: const Color(0xFF0F172A),
+        backgroundColor: Colors.white,
         elevation: 0,
         leadingWidth: 80,
         leading: widget.showBackButton && Navigator.canPop(context) 
@@ -537,7 +537,7 @@ class _GisMapViewState extends State<GisMapView> {
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1.0),
           child: Container(
-            color: Colors.white.withOpacity(0.08),
+            color: Colors.black.withOpacity(0.08),
             height: 1.0,
           ),
         ),
@@ -640,60 +640,58 @@ class _GisMapViewState extends State<GisMapView> {
                                    context: context,
                                    builder: (context) => Dialog(
                                      backgroundColor: Colors.transparent,
-                                     child: GlassCard(
-                                       borderRadius: 20,
-                                       blur: 15,
-                                       backgroundColor: const Color(0xFF0F172A).withOpacity(0.95),
-                                       borderColor: Colors.redAccent.withOpacity(0.3),
-                                       padding: const EdgeInsets.all(24),
-                                       child: Column(
-                                         mainAxisSize: MainAxisSize.min,
-                                         crossAxisAlignment: CrossAxisAlignment.start,
-                                         children: [
-                                           const Row(
-                                             children: [
-                                               Icon(Icons.crisis_alert, color: Colors.redAccent, size: 20),
-                                               SizedBox(width: 8),
-                                               Text(
-                                                 'Incident Report', 
-                                                 style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16),
-                                               ),
-                                             ],
-                                           ),
-                                           const SizedBox(height: 16),
-                                           Container(height: 1, color: Colors.white.withOpacity(0.08)),
-                                           const SizedBox(height: 16),
-                                           _buildDialogDetailRow('Activity', data['activityType'] ?? 'Other'),
-                                           _buildDialogDetailRow('Vessel', data['vesselType'] ?? 'Unknown'),
-                                           if (data['aiAnalysis'] != null)
-                                              _buildDialogDetailRow('AI Priority', '${data['aiAnalysis']['priority']}'),
-                                           const SizedBox(height: 24),
-                                           Row(
-                                             mainAxisAlignment: MainAxisAlignment.end,
-                                             children: [
-                                               TextButton(
-                                                 onPressed: () => Navigator.pop(context), 
-                                                 child: const Text('Close', style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
-                                               ),
-                                               const SizedBox(width: 12),
-                                               ElevatedButton(
-                                                 onPressed: () {
-                                                   Navigator.pop(context);
-                                                   _showDetailedComplaint(context, data);
-                                                 },
-                                                 style: ElevatedButton.styleFrom(
-                                                   backgroundColor: const Color(0xFF6366F1),
-                                                   foregroundColor: Colors.white,
-                                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                                                 ),
-                                                 child: const Text('View Full Details', style: TextStyle(fontWeight: FontWeight.bold)),
-                                               ),
-                                             ],
-                                           ),
-                                         ],
-                                       ),
-                                     ),
+                                     child: OceanGlassCard(
+                                        borderRadius: 20,
+                                        margin: EdgeInsets.zero,
+                                        padding: const EdgeInsets.all(24),
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Icon(Icons.crisis_alert, color: AppColors.danger, size: 20),
+                                                SizedBox(width: 8),
+                                                Text(
+                                                  'Incident Report', 
+                                                  style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary, fontSize: 16),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 16),
+                                            Container(height: 1, color: AppColors.divider),
+                                            const SizedBox(height: 16),
+                                            _buildDialogDetailRow('Activity', data['activityType'] ?? 'Other'),
+                                            _buildDialogDetailRow('Vessel', data['vesselType'] ?? 'Unknown'),
+                                            if (data['aiAnalysis'] != null)
+                                               _buildDialogDetailRow('AI Priority', '${data['aiAnalysis']['priority']}'),
+                                            const SizedBox(height: 24),
+                                            Row(
+                                              mainAxisAlignment: MainAxisAlignment.end,
+                                              children: [
+                                                TextButton(
+                                                  onPressed: () => Navigator.pop(context), 
+                                                  child: Text('Close', style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.bold)),
+                                                ),
+                                                const SizedBox(width: 12),
+                                                ElevatedButton(
+                                                  onPressed: () {
+                                                    Navigator.pop(context);
+                                                    _showDetailedComplaint(context, data);
+                                                  },
+                                                  style: ElevatedButton.styleFrom(
+                                                    backgroundColor: AppColors.primary,
+                                                    foregroundColor: Colors.white,
+                                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                                  ),
+                                                  child: const Text('View Full Details', style: TextStyle(fontWeight: FontWeight.bold)),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                      ),
                                    ),
                                  );
                               },
@@ -841,8 +839,8 @@ class _GisMapViewState extends State<GisMapView> {
             child: GlassCard(
               borderRadius: 20,
               blur: 15,
-              backgroundColor: const Color(0xFF0F172A).withOpacity(0.85),
-              borderColor: Colors.indigoAccent.withOpacity(0.2),
+              backgroundColor: Colors.white.withOpacity(0.85),
+              borderColor: Colors.grey.withOpacity(0.2),
               padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -891,8 +889,8 @@ class _GisMapViewState extends State<GisMapView> {
             child: GlassCard(
               borderRadius: 16,
               blur: 12,
-              backgroundColor: const Color(0xFF0F172A).withOpacity(0.85),
-              borderColor: Colors.indigoAccent.withOpacity(0.2),
+              backgroundColor: Colors.white.withOpacity(0.85),
+              borderColor: Colors.grey.withOpacity(0.2),
               padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -909,7 +907,7 @@ class _GisMapViewState extends State<GisMapView> {
                           fontFamily: 'monospace', 
                           fontWeight: FontWeight.bold, 
                           fontSize: 12,
-                          color: Colors.white,
+                          color: Colors.black87,
                         ),
                       ),
                     ],
@@ -922,16 +920,16 @@ class _GisMapViewState extends State<GisMapView> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF090D16),
+                          color: const Color(0xFFF1F5F9),
                           borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: Colors.white.withOpacity(0.08)),
+                          border: Border.all(color: Colors.black.withOpacity(0.08)),
                         ),
                         child: DropdownButtonHideUnderline(
                           child: DropdownButton<String>(
                             value: _currentScale,
                             isDense: true,
-                            dropdownColor: const Color(0xFF0F172A),
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                            dropdownColor: Colors.white,
+                            style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 12),
                             icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF06B6D4), size: 18),
                             items: _scaleMapping.keys.map((String scale) {
                               return DropdownMenuItem<String>(
@@ -1011,11 +1009,9 @@ class _GisMapViewState extends State<GisMapView> {
         
         return Dialog(
           backgroundColor: Colors.transparent,
-          child: GlassCard(
+          child: OceanGlassCard(
             borderRadius: 20,
-            blur: 15,
-            backgroundColor: const Color(0xFF0F172A).withOpacity(0.95),
-            borderColor: Colors.white.withOpacity(0.08),
+            margin: EdgeInsets.zero,
             padding: const EdgeInsets.all(24),
             child: SingleChildScrollView(
               child: Column(
@@ -1024,32 +1020,32 @@ class _GisMapViewState extends State<GisMapView> {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.description, color: Color(0xFF06B6D4), size: 20),
+                      Icon(Icons.description, color: AppColors.primary, size: 20),
                       const SizedBox(width: 10),
-                      const Text(
+                      Text(
                         'Incident Report Details', 
-                        style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16),
+                        style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary, fontSize: 16),
                       ),
                     ],
                   ),
                   const SizedBox(height: 16),
-                  Container(height: 1, color: Colors.white.withOpacity(0.08)),
+                  Container(height: 1, color: AppColors.divider),
                   const SizedBox(height: 16),
                   _buildDialogDetailRow('Activity', data['activityType'] ?? 'N/A'),
                   _buildDialogDetailRow('Vessel', data['vesselType'] ?? 'N/A'),
                   _buildDialogDetailRow('Description', data['description'] ?? 'N/A'),
                   _buildDialogDetailRow('Date', date != null ? "${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute}" : 'Unknown'),
-                  const Divider(color: Colors.white10, height: 24),
+                  Divider(color: AppColors.divider, height: 24),
                   _buildDialogDetailRow('Reporter', data['reporterName'] ?? 'Anonymous'),
                   if (data['isAnonymous'] == true) 
-                    const Padding(
-                      padding: EdgeInsets.only(top: 4.0),
-                      child: Text('(Submitted Anonymously)', style: TextStyle(fontStyle: FontStyle.italic, color: Color(0xFF64748B), fontSize: 11)),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4.0),
+                      child: Text('(Submitted Anonymously)', style: TextStyle(fontStyle: FontStyle.italic, color: AppColors.textSecondary, fontSize: 11)),
                     ),
                   const SizedBox(height: 16),
                   Row(
                     children: [
-                      const Text('Status: ', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13)),
+                      Text('Status: ', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary, fontSize: 13)),
                       const SizedBox(width: 10),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -1063,24 +1059,24 @@ class _GisMapViewState extends State<GisMapView> {
                     ],
                   ),
                   if (data['proofOfAction'] != null && data['proofOfAction'].toString().isNotEmpty) ...[
-                    const Divider(color: Colors.white10, height: 24),
-                    const Text('Proof of Action / Remarks:', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF10B981), fontSize: 13)),
+                    Divider(color: AppColors.divider, height: 24),
+                    Text('Proof of Action / Remarks:', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.success, fontSize: 13)),
                     const SizedBox(height: 8),
-                    Text(data['proofOfAction'], style: const TextStyle(color: Colors.white70, fontSize: 12, height: 1.4)),
+                    Text(data['proofOfAction'], style: TextStyle(color: AppColors.textPrimary, fontSize: 12, height: 1.4)),
                   ],
                   if (data['acknowledgementMessage'] != null && data['acknowledgementMessage'].toString().isNotEmpty) ...[
                     const SizedBox(height: 12),
-                    const Text('Official Feedback:', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF3B82F6), fontSize: 13)),
+                    Text('Official Feedback:', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.info, fontSize: 13)),
                     const SizedBox(height: 6),
                     Container(
                       padding: const EdgeInsets.all(10),
                       width: double.infinity,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF090D16), 
+                        color: AppColors.cardLight, 
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.white.withOpacity(0.04)),
+                        border: Border.all(color: AppColors.border),
                       ),
-                      child: Text(data['acknowledgementMessage'], style: const TextStyle(fontSize: 12, color: Colors.white70, height: 1.4)),
+                      child: Text(data['acknowledgementMessage'], style: TextStyle(fontSize: 12, color: AppColors.textPrimary, height: 1.4)),
                     ),
                   ],
                   const SizedBox(height: 24),
@@ -1089,7 +1085,7 @@ class _GisMapViewState extends State<GisMapView> {
                     children: [
                       TextButton(
                         onPressed: () => Navigator.pop(context),
-                        child: const Text('Back to Map', style: TextStyle(color: Color(0xFF6366F1), fontWeight: FontWeight.bold)),
+                        child: Text('Back to Map', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
                       ),
                     ],
                   ),
@@ -1109,33 +1105,31 @@ class _GisMapViewState extends State<GisMapView> {
           context: context,
           builder: (context) => Dialog(
             backgroundColor: Colors.transparent,
-            child: GlassCard(
+            child: OceanGlassCard(
               borderRadius: 20,
-              blur: 15,
-              backgroundColor: const Color(0xFF0F172A).withOpacity(0.95),
-              borderColor: const Color(0xFF06B6D4).withOpacity(0.3),
+              margin: EdgeInsets.zero,
               padding: const EdgeInsets.all(24),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
-                    children: const [
-                      Text('🐟', style: TextStyle(fontSize: 20)),
-                      SizedBox(width: 10),
-                      Text('Fish Concentration', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                    children: [
+                      const Text('🐟', style: TextStyle(fontSize: 20)),
+                      const SizedBox(width: 10),
+                      Text('Fish Concentration', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 16)),
                     ],
                   ),
                   const SizedBox(height: 16),
-                  Container(height: 1, color: Colors.white.withOpacity(0.08)),
+                  Container(height: 1, color: AppColors.divider),
                   const SizedBox(height: 16),
                   _buildDialogDetailRow('Species', species),
                   _buildDialogDetailRow('Availability', 'High 📈'),
                   _buildDialogDetailRow('Real-time Insight', density),
-                  const Divider(color: Colors.white10, height: 24),
-                  const Text(
+                  Divider(color: AppColors.divider, height: 24),
+                  Text(
                     'Market Prospect: PREMIUM (Goa Direct)', 
-                    style: TextStyle(fontSize: 10, fontStyle: FontStyle.italic, color: Color(0xFF64748B)),
+                    style: TextStyle(fontSize: 10, fontStyle: FontStyle.italic, color: AppColors.textSecondary),
                   ),
                   const SizedBox(height: 24),
                   Row(
@@ -1144,7 +1138,7 @@ class _GisMapViewState extends State<GisMapView> {
                       ElevatedButton(
                         onPressed: () => Navigator.pop(context),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF06B6D4),
+                          backgroundColor: AppColors.primary,
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         ),
@@ -1163,7 +1157,7 @@ class _GisMapViewState extends State<GisMapView> {
         child: Container(
           padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
-            color: const Color(0xFF0F172A).withOpacity(0.9),
+            color: AppColors.surface.withOpacity(0.9),
             shape: BoxShape.circle,
             border: Border.all(color: const Color(0xFF06B6D4), width: 1.5),
             boxShadow: [BoxShadow(color: const Color(0xFF06B6D4).withOpacity(0.3), blurRadius: 8)],

@@ -6,6 +6,9 @@ import '../models/fish_item.dart';
 import '../services/weather_service.dart';
 import '../services/fish_price_service.dart';
 import 'fish_detail_screen.dart';
+import '../widgets/ocean_glass_card.dart';
+import '../theme/app_theme.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class FishDirectoryScreen extends StatefulWidget {
   const FishDirectoryScreen({super.key});
@@ -331,59 +334,40 @@ class _FishDirectoryScreenState extends State<FishDirectoryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFE0F7FA), // Light blue sea background color fallback
-      body: Stack(
+      backgroundColor: Colors.transparent,
+      body: Column(
         children: [
-          // Background Overlay (Sea Surface effect)
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.blue.shade100.withOpacity(0.4),
-                  Colors.white.withOpacity(0.8),
-                ],
+          _buildTopRecommendations(),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Text(
+              'Available in Goa',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+                letterSpacing: 1.2,
               ),
             ),
           ),
-          SafeArea(
-            child: Column(
-              children: [
-                _buildTopRecommendations(),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  child: Text(
-                    'Available in Goa',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black,
-                      fontFamily: 'serif',
-                    ),
+          Expanded(
+            child: _filteredFishes.isEmpty 
+              ? _buildEmptyState()
+              : GridView.builder(
+                  padding: const EdgeInsets.only(left: 24, right: 24, top: 24, bottom: 150),
+                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: 280,
+                    mainAxisExtent: 320,
+                    crossAxisSpacing: 24,
+                    mainAxisSpacing: 24,
                   ),
+                  itemCount: _filteredFishes.length,
+                  itemBuilder: (context, index) {
+                    final fish = _filteredFishes[index];
+                    return _buildProductCard(fish);
+                  },
                 ),
-                Expanded(
-                  child: _filteredFishes.isEmpty 
-                    ? _buildEmptyState()
-                    : GridView.builder(
-                        padding: const EdgeInsets.all(24),
-                        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                          maxCrossAxisExtent: 280,
-                          mainAxisExtent: 320,
-                          crossAxisSpacing: 24,
-                          mainAxisSpacing: 24,
-                        ),
-                        itemCount: _filteredFishes.length,
-                        itemBuilder: (context, index) {
-                          final fish = _filteredFishes[index];
-                          return _buildProductCard(fish);
-                        },
-                      ),
-                ),
-              ],
-            ),
           ),
         ],
       ),
@@ -391,20 +375,20 @@ class _FishDirectoryScreenState extends State<FishDirectoryScreen> {
   }
 
   Widget _buildTopRecommendations() {
-    final recommended = _allFishes.take(5).toList(); // Simple taking top 5 for "Best Catch"
+    final recommended = _allFishes.take(5).toList(); 
     
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(24, 12, 24, 6),
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 6),
           child: Text(
             'TODAY\'S BEST CATCH',
-            style: TextStyle(
+            style: GoogleFonts.inter(
               fontSize: 14,
               letterSpacing: 2,
               fontWeight: FontWeight.w900,
-              color: Colors.black,
+              color: Colors.white70,
             ),
           ),
         ),
@@ -416,44 +400,46 @@ class _FishDirectoryScreenState extends State<FishDirectoryScreen> {
             itemCount: recommended.length,
             itemBuilder: (context, index) {
               final fish = recommended[index];
-              return Container(
-                width: 150,
-                margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10),
-                  ],
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: SizedBox(
+                  width: 150,
+                  child: Card(
+                    color: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    elevation: 3,
+                    child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: Center(
+                          child: fish.imageUrl != null 
+                            ? Image.asset(fish.imageUrl!, fit: BoxFit.contain)
+                            : Text(fish.icon, style: const TextStyle(fontSize: 60)),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          children: [
+                            Text(
+                              fish.name,
+                              style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87),
+                              textAlign: TextAlign.center,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              '₹${fish.currentPrice.toInt()}/kg',
+                              style: GoogleFonts.inter(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const SizedBox(height: 8),
-                    Expanded(
-                      child: Center(
-                        child: fish.imageUrl != null 
-                          ? Image.asset(fish.imageUrl!, fit: BoxFit.contain)
-                          : Text(fish.icon, style: const TextStyle(fontSize: 60)),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        children: [
-                          Text(
-                            fish.name,
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                            textAlign: TextAlign.center,
-                          ),
-                          Text(
-                            '₹${fish.currentPrice.toInt()}/kg',
-                            style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 12),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
                 ),
               );
             },
@@ -464,19 +450,10 @@ class _FishDirectoryScreenState extends State<FishDirectoryScreen> {
   }
 
   Widget _buildProductCard(FishItem fish) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+    return Card(
+      color: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 4,
       child: Column(
         children: [
           // Title at top
@@ -485,10 +462,10 @@ class _FishDirectoryScreenState extends State<FishDirectoryScreen> {
             child: Text(
               fish.name,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: GoogleFonts.inter(
                 fontWeight: FontWeight.bold,
                 fontSize: 18,
-                color: Color(0xFF455A64),
+                color: Colors.black87,
               ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
@@ -511,17 +488,18 @@ class _FishDirectoryScreenState extends State<FishDirectoryScreen> {
                 MaterialPageRoute(builder: (context) => FishDetailScreen(fish: fish))
               ),
               style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: Color(0xFF039BE5)),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                side: BorderSide(color: AppColors.primary.withOpacity(0.5)),
+                backgroundColor: AppColors.primary.withOpacity(0.1),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
-                children: const [
+                children: [
                    Text(
-                    '> See Details',
-                    style: TextStyle(
-                      color: Color(0xFF0277BD),
+                    'See Details >',
+                    style: GoogleFonts.inter(
+                      color: AppColors.primary,
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
                     ),
@@ -556,7 +534,12 @@ class _FishDirectoryScreenState extends State<FishDirectoryScreen> {
   }
 
   Widget _buildEmptyState() {
-    return const Center(child: Text('No match found'));
+    return Center(
+      child: Text(
+        'No match found',
+        style: GoogleFonts.inter(color: Colors.white),
+      ),
+    );
   }
 
 }

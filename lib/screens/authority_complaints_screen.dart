@@ -5,7 +5,10 @@ import 'package:intl/intl.dart';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-
+import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import '../theme/app_theme.dart';
+import '../widgets/animated_wave_header.dart';
 class AuthorityComplaintsScreen extends StatefulWidget {
   const AuthorityComplaintsScreen({Key? key}) : super(key: key);
 
@@ -31,26 +34,37 @@ class _AuthorityComplaintsScreenState extends State<AuthorityComplaintsScreen> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: const Color(0xFFF8FAFC),
-      padding: const EdgeInsets.all(16),
+      color: Colors.transparent,
+      padding: EdgeInsets.zero,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Complaints',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          _buildImageBanner(),
+          const SizedBox(height: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _buildComplaintStatsRow(),
           ),
           const SizedBox(height: 16),
-          _buildComplaintStatsRow(),
-          const SizedBox(height: 16),
-          _buildSearchBar(),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _buildSearchBar(),
+          ),
           const SizedBox(height: 12),
-          _buildFilterChips(),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _buildFilterChips(),
+          ),
           const SizedBox(height: 8),
-          _buildCategoryChips(),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _buildCategoryChips(),
+          ),
           const SizedBox(height: 12),
           Expanded(
-            child: StreamBuilder<QuerySnapshot>(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('complaints')
                   .orderBy('timestamp', descending: true)
@@ -104,6 +118,7 @@ class _AuthorityComplaintsScreenState extends State<AuthorityComplaintsScreen> {
                 }
 
                 return ListView.builder(
+                  padding: const EdgeInsets.only(bottom: 150),
                   itemCount: filteredDocs.length,
                   itemBuilder: (context, index) {
                     var doc = filteredDocs[index];
@@ -113,9 +128,25 @@ class _AuthorityComplaintsScreenState extends State<AuthorityComplaintsScreen> {
                 );
               },
             ),
+            ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildImageBanner() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 24, bottom: 16, left: 24, right: 24),
+      child: Text(
+        'Complaint Reports',
+        style: GoogleFonts.inter(
+          color: AppColors.textPrimary,
+          fontSize: 26,
+          fontWeight: FontWeight.w900,
+          letterSpacing: -0.5,
+        ),
+      ).animate().fadeIn(duration: 400.ms).slideX(),
     );
   }
 

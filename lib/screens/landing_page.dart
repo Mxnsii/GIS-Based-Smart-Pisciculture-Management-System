@@ -74,8 +74,8 @@ class _LandingPageState extends State<LandingPage> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFF0F172A), // Slate navy
-              Color(0xFF020617), // Space black
+              Color(0xFF0077B6), // Ocean Blue
+              Color(0xFF03045E), // Deep dark ocean
             ],
           ),
         ),
@@ -104,7 +104,7 @@ class _LandingPageState extends State<LandingPage> {
                         );
                       },
                     ),
-                    // Elegant dark slate overlay to fade the image bottom into the space background
+                    // Elegant overlay to fade the image bottom into the background
                     Positioned.fill(
                       child: Container(
                         decoration: BoxDecoration(
@@ -113,8 +113,8 @@ class _LandingPageState extends State<LandingPage> {
                             end: Alignment.bottomCenter,
                             colors: [
                               Colors.transparent,
-                              const Color(0xFF090D16).withOpacity(0.4),
-                              const Color(0xFF020617),
+                              const Color(0xFF03045E).withOpacity(0.4),
+                              const Color(0xFF03045E),
                             ],
                             stops: const [0.0, 0.6, 1.0],
                           ),
@@ -192,8 +192,8 @@ class _LandingPageState extends State<LandingPage> {
                           );
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF86EFAC), // Soft light green
-                          foregroundColor: const Color(0xFF064E3B), // Dark green text
+                          backgroundColor: const Color(0xFF48CAE4), // Light ocean blue button
+                          foregroundColor: const Color(0xFF03045E), // Dark text
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(30),
                           ),

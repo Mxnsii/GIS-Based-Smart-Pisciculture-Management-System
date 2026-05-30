@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'dart:math' as math;
 import 'gis_map_view.dart';
 import 'farm_registry_screen.dart';
@@ -7,12 +9,15 @@ import 'farm_details_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../widgets/weather_widget.dart';
 import '../widgets/custom_back_button.dart';
-import 'authority_complaints_screen.dart'; // Implemented Authority Complaints Tab
+import '../widgets/app_card.dart';
+import '../widgets/animated_wave_header.dart';
+import '../widgets/master_ocean_background.dart';
+import '../theme/app_theme.dart';
+import 'authority_complaints_screen.dart';
 import 'chatbot_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final String userName;
-
   const DashboardScreen({super.key, required this.userName});
 
   @override
@@ -22,11 +27,7 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   int _selectedIndex = 0;
 
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-  }
+  void _onItemTapped(int index) => setState(() => _selectedIndex = index);
 
   late final List<Widget> _pages;
 
@@ -44,423 +45,453 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF090D16),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF0F172A),
-        elevation: 0,
-        title: const Text(
-          'GIS Smart Pisciculture Management',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        automaticallyImplyLeading: false,
-        leading: _selectedIndex != 0
-            ? CustomBackButton(
-                onPressed: () => _onItemTapped(0),
-              )
-            : (Navigator.canPop(context) 
-                ? CustomBackButton(onPressed: () => Navigator.pop(context)) 
-                : null),
-        leadingWidth: 80,
-        actions: [
-          Center(
-            child: Text(
-              'Welcome, ${widget.userName}',
-              style: const TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w500),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout, color: Colors.redAccent),
-            onPressed: () {
-              Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
-                MaterialPageRoute(
-                  builder: (_) => const LoginScreen(),
+      backgroundColor: Colors.transparent,
+      body: MasterOceanBackground(
+        child: Column(
+          children: [
+            _buildAppBar(),
+            Expanded(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  transitionBuilder: (child, animation) {
+                    return FadeTransition(
+                      opacity: animation,
+                      child: SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(0.05, 0),
+                          end: Offset.zero,
+                        ).animate(animation),
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: KeyedSubtree(
+                    key: ValueKey<int>(_selectedIndex),
+                    child: _pages[_selectedIndex],
+                  ),
                 ),
-                (route) => false,
-              );
-            },
-          ),
-          const SizedBox(width: 16),
-        ],
-        bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(1.0),
-            child: Container(
-              color: const Color(0xFF1E293B),
-              height: 1.0,
-            )),
-      ),
-      body: _pages[_selectedIndex],
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const ChatbotScreen(),
-            ),
-          );
-        },
-        backgroundColor: Colors.blueAccent,
-        icon: const Icon(Icons.support_agent, color: Colors.white),
-        label: const Text('GIS Agent', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        items: const <BottomNavigationBarItem>[
-          BottomNavigationBarItem(
-            icon: Icon(Icons.dashboard),
-            label: 'Dashboard',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.map),
-            label: 'GIS Map',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.list_alt),
-            label: 'Farm Registry',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.warning, color: Colors.orangeAccent),
-            label: 'Complaints',
-          ),
-        ],
-        currentIndex: _selectedIndex,
-        selectedItemColor: Colors.blueAccent,
-        unselectedItemColor: const Color(0xFF64748B),
-        onTap: _onItemTapped,
-        type: BottomNavigationBarType.fixed,
-        backgroundColor: const Color(0xFF0F172A),
-        elevation: 8,
-      ),
-    );
-  }
-}
-
-class DashboardHomeView extends StatelessWidget {
-  final Function(int) onTabChange;
-
-  const DashboardHomeView({super.key, required this.onTabChange});
-
-  // Mock data for pending farms, matching GisMapView data
-  final List<Map<String, dynamic>> _pendingFarms = const [
-// ... [Keep pending farms list]
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Expanded(
-          child: SingleChildScrollView(
-            child: Container(
-              color: const Color(0xFF090D16), // Slate black background
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Authority Dashboard',
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 0.5),
-                  ),
-                  const SizedBox(height: 20),
-                  const WeatherWidget(), // Add Weather Widget
-                  const SizedBox(height: 28),
-                  Row(
-                    children: [
-                      _buildStatCard(
-                        title: 'TOTAL REGISTERED FARMS',
-                        valueWidget: const Text(
-                          '4',
-                          style: TextStyle(color: Colors.blueAccent, fontSize: 32, fontWeight: FontWeight.bold),
-                        ),
-                        color: Colors.blueAccent,
-                        onTap: () => onTabChange(2), // Index 2: Farm Registry
-                      ),
-                      const SizedBox(width: 24),
-                      _buildStatCard(
-                        title: 'FARMS IN CRZ ZONE (MOCK)',
-                        valueWidget: const Text(
-                          '8',
-                          style: TextStyle(color: Colors.redAccent, fontSize: 32, fontWeight: FontWeight.bold),
-                        ),
-                        color: Colors.redAccent,
-                        onTap: () => onTabChange(1), // Index 1: GIS Map
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  Row(
-                    children: [
-                      _buildStatCard(
-                        title: 'ACTIVE COMPLAINTS',
-                        valueWidget: StreamBuilder<QuerySnapshot>(
-                          stream: FirebaseFirestore.instance.collection('complaints').snapshots(),
-                          builder: (context, snapshot) {
-                            if (snapshot.connectionState == ConnectionState.waiting) {
-                              return const SizedBox(
-                                height: 32,
-                                width: 32,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              );
-                            }
-                            if (snapshot.hasError) {
-                              return const Text('Error', style: TextStyle(color: Colors.red, fontSize: 16));
-                            }
-                            final count = snapshot.data?.docs.length ?? 0;
-                            return Text(
-                              '$count',
-                              style: const TextStyle(color: Colors.orangeAccent, fontSize: 32, fontWeight: FontWeight.bold),
-                            );
-                          },
-                        ),
-                        color: Colors.orangeAccent,
-                        onTap: () => onTabChange(3), // Index 3: Authority Complaints Screen
-                      ),
-                      const SizedBox(width: 24),
-                      Expanded(child: Container()), // Empty placeholder to keep card sizing consistent
-                    ],
-                  ),
-                  const SizedBox(height: 32),
-                  const _AnimatedFishFooter(),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatCard({required String title, required Widget valueWidget, required Color color, required VoidCallback onTap}) {
-    return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1E293B),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: color.withOpacity(0.35), width: 1.5),
-            boxShadow: [
-              BoxShadow(
-                color: color.withOpacity(0.06),
-                blurRadius: 16,
-                offset: const Offset(0, 6),
               ),
             ],
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  color: Color(0xFF94A3B8),
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 0.8,
-                ),
-              ),
-              const SizedBox(height: 12),
-              valueWidget,
-            ],
-          ),
-        ),
       ),
+      floatingActionButton: _buildFAB(context),
+      extendBody: true,
+      bottomNavigationBar: _buildNavBar(),
     );
   }
 
-  Widget _buildFarmCard({required BuildContext context, required Map<String, dynamic> farm}) {
+  Widget _buildAppBar() {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.only(
+        top: MediaQuery.of(context).padding.top + 10,
+        left: 20, right: 20, bottom: 10
+      ),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.shade200),
+        color: AppColors.surface.withOpacity(0.85),
+        border: Border(bottom: BorderSide(color: AppColors.border)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.shadowBlue.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          )
+        ]
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
               children: [
-                Text(
-                  farm['name'],
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Owner: ${farm['owner']}',
-                  style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
-                  overflow: TextOverflow.ellipsis,
+                if (_selectedIndex != 0)
+                  CustomBackButton(onPressed: () => _onItemTapped(0)),
+                if (_selectedIndex == 0)
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(colors: AppColors.oceanGradient),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(color: AppColors.primary.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 3))
+                      ]
+                    ),
+                    child: const Icon(Icons.waves_rounded, color: Colors.white, size: 20),
+                  ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Authority Dashboard',
+                    style: GoogleFonts.inter(
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textPrimary,
+                      fontSize: 18,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ],
             ),
           ),
           const SizedBox(width: 8),
-          ElevatedButton(
-            onPressed: () {
-               final String status = (farm['status'] ?? '').toString();
-               if (status == 'Inactive') {
-                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('This farm is inactive. Details are disabled.')));
-                 return;
-               }
-
-               Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => FarmDetailsScreen(farmData: farm, isAuthority: true),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                icon: Icon(
+                  AppTheme.isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+                  color: AppColors.primary,
+                  size: 22,
                 ),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
+                onPressed: () {
+                  setState(() {
+                    AppTheme.toggleTheme();
+                  });
+                },
               ),
-            ),
-            child: const Text('Review'),
-          ),
+              const SizedBox(width: 4),
+              Container(
+                constraints: const BoxConstraints(maxWidth: 150),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 8, height: 8,
+                      decoration: BoxDecoration(
+                        color: AppColors.secondary,
+                        shape: BoxShape.circle,
+                        boxShadow: [BoxShadow(color: AppColors.secondary.withOpacity(0.5), blurRadius: 4)],
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        widget.userName,
+                        style: GoogleFonts.inter(
+                          fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.primary),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 4),
+              IconButton(
+                icon: Icon(Icons.logout_rounded, color: AppColors.danger, size: 22),
+                onPressed: () => Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const LoginScreen()), (r) => false),
+              ),
+            ],
+          )
         ],
       ),
     );
   }
-}
 
-// -----------------------------------------------------------------------------
-// NATIVE ANIMATED FISH FOOTER
-// -----------------------------------------------------------------------------
-class _AnimatedFishFooter extends StatefulWidget {
-  const _AnimatedFishFooter();
-
-  @override
-  __AnimatedFishFooterState createState() => __AnimatedFishFooterState();
-}
-
-class __AnimatedFishFooterState extends State<_AnimatedFishFooter> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(seconds: 15))..repeat();
+  Widget _buildFAB(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(30),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.secondary.withOpacity(0.4),
+            blurRadius: 20,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: FloatingActionButton.extended(
+        onPressed: () => Navigator.push(
+          context, MaterialPageRoute(builder: (_) => const ChatbotScreen())),
+        backgroundColor: AppColors.secondary,
+        icon: const Icon(Icons.support_agent_rounded, color: Colors.white),
+        label: Text('GIS Agent',
+            style: GoogleFonts.inter(
+                color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
+      ),
+    ).animate().scale(duration: 300.ms, delay: 200.ms, curve: Curves.easeOutBack);
   }
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
+  Widget _buildNavBar() {
+    return Container(
+      margin: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
+      decoration: BoxDecoration(
+        color: AppColors.surface.withOpacity(0.95),
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(color: AppColors.shadowBlue.withOpacity(0.15), blurRadius: 20, offset: const Offset(0, 8)),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(30),
+        child: NavigationBar(
+          selectedIndex: _selectedIndex,
+          onDestinationSelected: _onItemTapped,
+          backgroundColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          height: 65,
+          destinations: [
+            _buildNavDest(Icons.dashboard_outlined, Icons.dashboard_rounded, 'Dashboard', 0),
+            _buildNavDest(Icons.map_outlined, Icons.map_rounded, 'GIS Map View', 1),
+            _buildNavDest(Icons.list_alt_outlined, Icons.list_alt_rounded, 'Farm Registry', 2),
+            _buildNavDest(Icons.warning_amber_outlined, Icons.warning_amber_rounded, 'Incident Logs', 3),
+          ],
+        ),
+      ),
+    ).animate().slideY(begin: 1.0, end: 0, duration: 400.ms, curve: Curves.easeOutCubic);
   }
+
+  NavigationDestination _buildNavDest(IconData icon, IconData selectedIcon, String label, int index) {
+    return NavigationDestination(
+      icon: Icon(icon, color: AppColors.textMuted),
+      selectedIcon: Icon(selectedIcon, color: AppColors.primary).animate().shake(hz: 3),
+      label: label,
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+class DashboardHomeView extends StatelessWidget {
+  final Function(int) onTabChange;
+  const DashboardHomeView({super.key, required this.onTabChange});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 100, // Fixed footer height
-      width: double.infinity,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.indigoAccent.withOpacity(0.2), width: 1.5),
-        gradient: const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFF0F172A), Color(0xFF090D16)], // Slate Navy to Slate Black
-        ),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Stack(
+      color: Colors.transparent,
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Background Wave 1
-            Positioned.fill(
-              child: Opacity(
-                opacity: 0.2,
-                child: CustomPaint(painter: _WavePainter(offset: 0, amp: 10, freq: 2)),
-              ),
-            ),
-            // Background Wave 2
-            Positioned.fill(
-              child: Opacity(
-                opacity: 0.4,
-                child: CustomPaint(painter: _WavePainter(offset: 3.14, amp: 15, freq: 1.5)),
-              ),
-            ),
-            // Swimming Fish Animations
-            AnimatedBuilder(
-              animation: _controller,
-              builder: (context, child) {
-                double w = MediaQuery.of(context).size.width;
-                return Stack(
-                  children: [
-                    // Little fast fish
-                    Positioned(
-                      top: 15,
-                      left: w - ((_controller.value * 1.5) % 1.0 * (w + 100)),
-                      child: const Text('🐠', style: TextStyle(fontSize: 20)),
-                    ),
-                    // Medium standard fish
-                    Positioned(
-                      top: 40,
-                      left: w - ((_controller.value) * (w + 100)),
-                      child: const Text('🐟', style: TextStyle(fontSize: 32)),
-                    ),
-                    // Big slow puffer
-                    Positioned(
-                      top: 60,
-                      left: w - ((_controller.value * 0.7) % 1.0 * (w + 100)),
-                      child: const Text('🐡', style: TextStyle(fontSize: 24)),
-                    ),
-                    // Opposite direction fast fish!
-                    Positioned(
-                      top: 75,
-                      right: w - ((_controller.value * 1.2) % 1.0 * (w + 100)),
-                      child: Transform(
-                        alignment: Alignment.center,
-                        transform: Matrix4.rotationY(3.14159), // Flip horizontally
-                        child: const Text('🐠', style: TextStyle(fontSize: 16)),
+            // Image banner
+            _buildImageBanner().animate().fadeIn(duration: 400.ms).slideY(begin: -0.05),
+
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Weather
+                  const WeatherWidget().animate().fadeIn(duration: 500.ms).slideY(begin: 0.1),
+                  const SizedBox(height: 24),
+
+                  // Section label
+                  _sectionLabel('Quick Stats').animate().fadeIn(delay: 100.ms),
+                  const SizedBox(height: 14),
+
+                  // Row 1
+                  Row(
+                    children: [
+                      StatCard(
+                        title: 'REGISTERED FARMS',
+                        valueWidget: Text('4',
+                            style: GoogleFonts.inter(
+                                color: AppColors.primary, fontSize: 32, fontWeight: FontWeight.w800)),
+                        icon: Icons.agriculture_rounded,
+                        accentColor: AppColors.primary,
+                        subtitle: 'Active aquaculture sites',
+                        onTap: () => onTabChange(2),
                       ),
-                    ),
-                  ],
-                );
-              },
-            ),
-            // Minimalist sandy bottom overlay (no text)
-            Positioned(
-              left: 0, right: 0, bottom: 0, height: 12,
-              child: Container(color: const Color(0xFF1E293B).withOpacity(0.5)),
+                      const SizedBox(width: 14),
+                      StatCard(
+                        title: 'FARMS IN CRZ ZONE',
+                        valueWidget: Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text('8',
+                                style: GoogleFonts.inter(
+                                    color: AppColors.danger,
+                                    fontSize: 32,
+                                    fontWeight: FontWeight.w800)),
+                            const SizedBox(width: 8),
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 5),
+                              child: _badge('Mock', AppColors.warning),
+                            ),
+                          ],
+                        ),
+                        icon: Icons.location_on_rounded,
+                        accentColor: AppColors.danger,
+                        subtitle: 'Coastal regulation zone',
+                        onTap: () => onTabChange(1),
+                      ),
+                    ],
+                  ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.1),
+                  const SizedBox(height: 14),
+
+                  // Row 2
+                  Row(
+                    children: [
+                      StatCard(
+                        title: 'TOTAL COMPLAINTS',
+                        valueWidget: StreamBuilder<QuerySnapshot>(
+                          stream: FirebaseFirestore.instance.collection('complaints').snapshots(),
+                          builder: (ctx, snap) {
+                            if (snap.connectionState == ConnectionState.waiting) {
+                              return const SizedBox(width: 32, height: 32,
+                                  child: CircularProgressIndicator(strokeWidth: 2));
+                            }
+                            final count = snap.data?.docs.length ?? 0;
+                            return Text('$count',
+                                style: GoogleFonts.inter(
+                                    color: AppColors.warning,
+                                    fontSize: 32,
+                                    fontWeight: FontWeight.w800));
+                          },
+                        ),
+                        icon: Icons.report_problem_rounded,
+                        accentColor: AppColors.warning,
+                        subtitle: 'Pending review',
+                        onTap: () => onTabChange(3),
+                      ),
+                      const SizedBox(width: 14),
+                      StatCard(
+                        title: 'WATER QUALITY',
+                        valueWidget: Text('Optimal',
+                            style: GoogleFonts.inter(
+                                color: AppColors.success,
+                                fontSize: 24,
+                                fontWeight: FontWeight.w800)),
+                        icon: Icons.water_drop_rounded,
+                        accentColor: AppColors.success,
+                        subtitle: 'All parameters stable',
+                      ),
+                    ],
+                  ).animate().fadeIn(delay: 300.ms).slideY(begin: 0.1),
+
+                  const SizedBox(height: 150),
+                ],
+              ),
             ),
           ],
         ),
       ),
     );
   }
-}
 
-class _WavePainter extends CustomPainter {
-  final double offset;
-  final double amp;
-  final double freq;
-
-  _WavePainter({required this.offset, required this.amp, required this.freq});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.indigoAccent.withOpacity(0.15)
-      ..style = PaintingStyle.fill;
-    final path = Path();
-    path.moveTo(0, size.height * 0.4);
-    
-    for (double x = 0; x <= size.width; x++) {
-      double y = math.sin((x / size.width * math.pi * freq) + offset) * amp + (size.height * 0.4);
-      path.lineTo(x, y);
-    }
-    
-    path.lineTo(size.width, size.height);
-    path.lineTo(0, size.height);
-    canvas.drawPath(path, paint);
+  Widget _sectionLabel(String text) {
+    return Row(
+      children: [
+        Container(
+          width: 4, height: 20,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter, end: Alignment.bottomCenter,
+              colors: AppColors.oceanGradient
+            ),
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Text(text,
+            style: GoogleFonts.inter(
+                fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+      ],
+    );
   }
 
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  Widget _buildImageBanner() {
+    return ClipRRect(
+      borderRadius: const BorderRadius.only(
+        bottomLeft: Radius.circular(32),
+        bottomRight: Radius.circular(32),
+      ),
+      child: Stack(
+        children: [
+          SizedBox(
+            height: 180,
+            width: double.infinity,
+            child: Image.asset(
+              'assets/images/dashboard_hero.png',
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: AppColors.oceanGradient,
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Container(
+            height: 180,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Colors.transparent, AppColors.primary.withOpacity(0.85)],
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: 20,
+            left: 24,
+            right: 24,
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.white.withOpacity(0.3)),
+                  ),
+                  child: const Icon(Icons.waves_rounded, color: Colors.white, size: 24),
+                ).animate(onPlay: (controller) => controller.repeat(reverse: true)).shimmer(duration: 2.seconds, color: Colors.white54),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Pisciculture Dashboard',
+                        style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          shadows: [const Shadow(color: Colors.black26, blurRadius: 4)],
+                        ),
+                      ).animate().fadeIn(duration: 400.ms).slideX(),
+                      Text(
+                        'Smart monitoring and management',
+                        style: GoogleFonts.inter(
+                          color: Colors.white.withOpacity(0.9),
+                          fontSize: 13,
+                          shadows: [const Shadow(color: Colors.black26, blurRadius: 4)],
+                        ),
+                      ).animate().fadeIn(duration: 400.ms, delay: 100.ms).slideX(),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _badge(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Text(text,
+          style: GoogleFonts.inter(
+              color: color, fontSize: 10, fontWeight: FontWeight.w800)),
+    );
+  }
 }

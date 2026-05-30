@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
 
 class SwimmingFishBackground extends StatefulWidget {
   final Widget? child;
@@ -78,20 +79,20 @@ class _SwimmingFishBackgroundState extends State<SwimmingFishBackground>
   void _initializeFishes(Size size) {
     _fishes.clear();
     for (int i = 0; i < widget.fishCount; i++) {
-      // Mapped colors: Neon Indigo, Neon Teal, Glowing Pink/Coral, Cyan Accent
+      // Light Theme Fish Colors: Deep Blues, Teals, and Orange (Koi)
       Color color;
       switch (i % 4) {
         case 0:
-          color = const Color(0xFF6366F1); // Indigo
+          color = const Color(0xFF0284C7); // Deep Ocean Blue
           break;
         case 1:
-          color = const Color(0xFF14B8A6); // Teal
+          color = const Color(0xFF0D9488); // Teal
           break;
         case 2:
-          color = const Color(0xFFEC4899); // Pink
+          color = const Color(0xFFEA580C); // Orange Koi
           break;
         default:
-          color = const Color(0xFF06B6D4); // Cyan
+          color = const Color(0xFF2563EB); // Royal Blue
       }
 
       double x = random.nextDouble() * size.width;
@@ -247,18 +248,24 @@ class _SwimmingFishBackgroundState extends State<SwimmingFishBackground>
           },
           child: Stack(
             children: [
-              // Dark glowing aquatic deep water background
+              // Dynamic glowing aquatic background depending on theme
               Positioned.fill(
                 child: Container(
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
-                      colors: [
-                        Color(0xFF070B13),
-                        Color(0xFF090D16),
-                        Color(0xFF0D1527),
-                      ],
+                      colors: AppTheme.isDark
+                          ? const [
+                              Color(0xFF070B14), // Premium deep dark navy
+                              Color(0xFF0B1220), // Dark ocean depths
+                              Color(0xFF0F182A), // Soft dark slate
+                            ]
+                          : const [
+                              Color(0xFFE0F2FE), // Light sky blue
+                              Color(0xFFBAE6FD), // Lighter blue
+                              Color(0xFF7DD3FC), // Deeper aqua
+                            ],
                     ),
                   ),
                 ),
@@ -269,7 +276,7 @@ class _SwimmingFishBackgroundState extends State<SwimmingFishBackground>
                   painter: _FishSwarmPainter(fishes: _fishes, ripples: _ripples),
                 ),
               ),
-              // Floating glowing overlay lights for ambiance
+              // Floating glowing overlay lights for ambiance (adapted to theme)
               Positioned.fill(
                 child: IgnorePointer(
                   child: Container(
@@ -278,7 +285,9 @@ class _SwimmingFishBackgroundState extends State<SwimmingFishBackground>
                         center: Alignment.center,
                         radius: 1.2,
                         colors: [
-                          Colors.indigoAccent.withOpacity(0.03),
+                          AppTheme.isDark
+                              ? Colors.cyan.withOpacity(0.08)
+                              : Colors.white.withOpacity(0.5),
                           Colors.transparent,
                         ],
                       ),
@@ -316,7 +325,7 @@ class _FishSwarmPainter extends CustomPainter {
 
         // Faint indigo secondary concentric wave
         if (ripple.radius > 20) {
-          ripplePaint.color = const Color(0xFF6366F1).withOpacity(ripple.opacity * 0.25);
+          ripplePaint.color = const Color(0xFF0284C7).withOpacity(ripple.opacity * 0.25);
           canvas.drawCircle(ripple.position, ripple.radius - 15, ripplePaint);
         }
       }

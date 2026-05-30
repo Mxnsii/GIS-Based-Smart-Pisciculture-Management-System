@@ -13,7 +13,12 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:record/record.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:http/http.dart' as http;
-import '../widgets/glass_card.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import '../widgets/ocean_glass_card.dart';
+import '../theme/app_theme.dart';
+import '../widgets/animated_wave_header.dart';
+// Note: Bypassing Firebase Storage by using Base64 encoding
 
 class ComplaintRegistryScreen extends StatefulWidget {
   final String farmerName;
@@ -26,8 +31,6 @@ class ComplaintRegistryScreen extends StatefulWidget {
 class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
   final _formKey = GlobalKey<FormState>();
   
-  int _currentStep = 0; // 0: Classification & Contact, 1: Details & Evidence, 2: Location Review & Send
-  
   bool _isAnonymous = false;
   String? _selectedVesselType;
   String? _selectedActivityType;
@@ -38,6 +41,7 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
   bool _isSearchingLocation = false;
   File? _imageFile;
   Uint8List? _webImage;
+  bool _hasImage = false;
   bool _isSubmitting = false;
   bool _isSuccess = false;
   String? _submittedComplaintId;
@@ -128,9 +132,10 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
     try {
       if (await _audioRecorder.hasPermission()) {
         final String path = kIsWeb ? '' : '${Directory.systemTemp.path}/complaint_audio.m4a';
+        // Optimize for size: 32kbps mono is plenty for voice and keeps Firestore doc under 1MB
         await _audioRecorder.start(
-          const RecordConfig(
-            encoder: AudioEncoder.aacLc,
+          RecordConfig(
+            encoder: kIsWeb ? AudioEncoder.opus : AudioEncoder.aacLc,
             bitRate: 32000, 
             numChannels: 1,
           ), 
@@ -178,24 +183,40 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
     });
   }
 
+  void _deleteImage() {
+    setState(() {
+      _imageFile = null;
+      _webImage = null;
+      _hasImage = false;
+    });
+  }
+
   Future<void> _pickImage() async {
-    final pickedFile = await ImagePicker().pickImage(
-      source: ImageSource.camera,
-      imageQuality: 15, 
-      maxWidth: 450,    
-      maxHeight: 450,   
-    );
-    if (pickedFile != null) {
-      if (kIsWeb) {
-        var f = await pickedFile.readAsBytes();
-        setState(() {
-          _webImage = f;
-          _imageFile = File('a'); 
-        });
-      } else {
-        setState(() {
-          _imageFile = File(pickedFile.path);
-        });
+    try {
+      final pickedFile = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+      );
+
+      if (pickedFile != null) {
+        if (kIsWeb) {
+          final bytes = await pickedFile.readAsBytes();
+          setState(() {
+            _webImage = bytes;
+            _hasImage = true;
+          });
+        } else {
+          setState(() {
+            _imageFile = File(pickedFile.path);
+            _hasImage = true;
+          });
+        }
+      }
+    } catch (e) {
+      print("Error picking image: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error selecting image: $e'), backgroundColor: Colors.red),
+        );
       }
     }
   }
@@ -206,6 +227,8 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
     setState(() => _isSearchingLocation = true);
 
     try {
+      // Using OpenStreetMap Nominatim API (Free, no API key required)
+      // Bounded roughly to Goa region for better relevance
       final url = Uri.parse('https://nominatim.openstreetmap.org/search?q=$query&format=json&addressdetails=1&countrycodes=in&viewbox=73.5,15.8,74.5,14.8&bounded=1&limit=5');
       final response = await http.get(url, headers: {'User-Agent': 'GIS_Smart_Pisciculture_App'});
       
@@ -232,6 +255,7 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
     setState(() => _isSearchingLocation = true);
     try {
       Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+      // Reverse geocode using Nominatim
       final url = Uri.parse('https://nominatim.openstreetmap.org/reverse?lat=${position.latitude}&lon=${position.longitude}&format=json');
       final response = await http.get(url, headers: {'User-Agent': 'GIS_Smart_Pisciculture_App'});
       
@@ -244,6 +268,7 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
             'lng': position.longitude,
           };
         });
+        // Success feedback
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('📍 Location detected successfully!'), backgroundColor: Colors.green),
@@ -274,22 +299,27 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
     });
 
     try {
-      final String complaintId = const Uuid().v4();
+      print("Starting complaint submission...");
+      final String complaintId = const Uuid().v4().substring(0, 8).toUpperCase();
       String? imageUrl;
 
+      // 1. Convert Image to Base64 (Bypass Storage)
+      print("Converting image to Base64...");
       try {
         if (kIsWeb && _webImage != null) {
           final base64String = base64Encode(_webImage!);
           imageUrl = 'data:image/jpeg;base64,$base64String';
-        } else if (!kIsWeb && _imageFile != null && _imageFile!.path != 'a') {
+        } else if (!kIsWeb && _imageFile != null) {
           final bytes = await _imageFile!.readAsBytes();
           final base64String = base64Encode(bytes);
           imageUrl = 'data:image/jpeg;base64,$base64String';
         }
       } catch (uploadError) {
-        print("Image conversion failed. Continuing without image.");
+        print("Image conversion failed: $uploadError. Continuing without image.");
       }
+      print("Image URL: $imageUrl");
 
+      // 1b. Convert Audio to Base64 (Bypass Storage)
       String? audioUrl;
       try {
         if (_audioPath != null && _audioPath!.isNotEmpty) {
@@ -304,9 +334,11 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
           audioUrl = 'data:audio/mp4;base64,$base64String';
         }
       } catch (e) {
-        print("Audio conversion failed. Continuing without audio.");
+        print("Audio conversion failed: $e. Continuing without audio.");
       }
 
+      // 2. Add AI Analysis
+      print("Analyzing complaint with AI...");
       final aiAnalysis = await AIComplaintService.analyzeComplaint({
         'activityType': _selectedActivityType,
         'vesselType': _selectedVesselType,
@@ -314,10 +346,12 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
         'location': 'Lat: ${_selectedLocationData!['lat']}, Lng: ${_selectedLocationData!['lng']} (${_selectedLocationData!['name']})',
       });
 
+      // 3. Save data to Firestore
+      print("Saving to Firestore...");
       await FirebaseFirestore.instance.collection('complaints').doc(complaintId).set({
         'id': complaintId,
         'reporterName': _isAnonymous ? 'Anonymous' : widget.farmerName,
-        'originalFarmerName': widget.farmerName, 
+        'originalFarmerName': widget.farmerName, // Always link to original farmer id/name
         'isAnonymous': _isAnonymous,
         'vesselType': _selectedVesselType,
         'activityType': _selectedActivityType,
@@ -327,18 +361,20 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
         'locationName': _selectedLocationData!['name'],
         'imageUrl': imageUrl,
         'audioUrl': audioUrl,
-        'status': 'Pending', 
+        'status': 'Pending', // Pending, Reviewed, Action Taken
         'timestamp': FieldValue.serverTimestamp(),
         if (aiAnalysis != null) 'aiAnalysis': aiAnalysis,
       });
 
       if (mounted) {
+        print("Firestore save complete. Showing success message.");
         setState(() {
           _isSuccess = true;
           _submittedComplaintId = complaintId;
         });
       }
     } catch (e) {
+       print("ERROR CAUGHT DURING SUBMISSION: $e");
        if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error submitting report: $e'), backgroundColor: Colors.red),
@@ -358,49 +394,48 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
     return DefaultTabController(
       length: 2,
       child: Scaffold(
-      backgroundColor: const Color(0xFF090D16), // Premium dark mode background
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF0F172A),
-        elevation: 0,
-        leading: CustomBackButton(onPressed: () {
-          if (_isSuccess) {
-            setState(() {
-              _isSuccess = false;
-              _isAnonymous = false;
-              _selectedVesselType = null;
-              _selectedActivityType = null;
-              _descriptionController.clear();
-              _phoneController.clear();
-              _imageFile = null;
-              _webImage = null;
-              _currentStep = 0;
-            });
-          } else {
-            Navigator.pop(context);
-          }
-        }),
-        leadingWidth: 80,
-        title: const Text(
-          'Incident Command',
-          style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 18, letterSpacing: 0.5),
-        ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(49.0),
+      backgroundColor: Colors.transparent,
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(130),
+        child: AnimatedWaveHeader(
+          height: 130,
           child: Column(
+            mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              const TabBar(
-                labelColor: Color(0xFFEF4444),
-                unselectedLabelColor: Color(0xFF64748B),
-                indicatorColor: Color(0xFFEF4444),
-                indicatorWeight: 3,
-                tabs: [
-                  Tab(icon: Icon(Icons.edit_note, size: 20), text: "New Report"),
-                  Tab(icon: Icon(Icons.history, size: 20), text: "My Reports"),
-                ],
+              AppBar(
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                leading: CustomBackButton(onPressed: () {
+                  if (_isSuccess) {
+                    setState(() {
+                      _isSuccess = false;
+                      _isAnonymous = false;
+                      _selectedVesselType = null;
+                      _selectedActivityType = null;
+                      _descriptionController.clear();
+                      _phoneController.clear();
+                      _imageFile = null;
+                      _webImage = null;
+                      _hasImage = false;
+                    });
+                  } else {
+                    Navigator.pop(context);
+                  }
+                }),
+                title: Text(
+                  'Report Incident',
+                  style: GoogleFonts.inter(color: AppColors.textPrimary, fontWeight: FontWeight.w900, fontSize: 22),
+                ),
               ),
-              Container(
-                color: Colors.white.withOpacity(0.08),
-                height: 1.0,
+              TabBar(
+                labelColor: AppColors.primary,
+                unselectedLabelColor: AppColors.textSecondary,
+                indicatorColor: AppColors.primary,
+                labelStyle: GoogleFonts.inter(fontWeight: FontWeight.w700),
+                tabs: const [
+                  Tab(icon: Icon(Icons.edit_note_rounded), text: "New Report"),
+                  Tab(icon: Icon(Icons.history_rounded), text: "My Reports"),
+                ],
               ),
             ],
           ),
@@ -408,38 +443,293 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
       ),
       body: TabBarView(
         children: [
-          // Tab 1: New Report Form Wizard
+          // Tab 1: New Report Form
           _isSuccess 
             ? _buildSuccessScreen()
             : (_isSubmitting 
-              ? const Center(child: CircularProgressIndicator(color: Color(0xFFEF4444)))
-              : Column(
-                  children: [
-                    // Step Progress Indicator Bar
-                    _buildStepIndicator(),
-                    
-                    Expanded(
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
-                        child: Form(
-                          key: _formKey,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              if (_currentStep == 0) _buildStep1(),
-                              if (_currentStep == 1) _buildStep2(),
-                              if (_currentStep == 2) _buildStep3(),
-                              const SizedBox(height: 24),
-                            ],
+              ? Center(child: CircularProgressIndicator(color: AppColors.primary))
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildWarningBanner(),
+                        const SizedBox(height: 12),
+                        OceanGlassCard(
+                          child: SwitchListTile(
+                            title: Text('Submit Anonymously', style: GoogleFonts.inter(fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+                            subtitle: Text('Your name will be hidden from the authorities.', style: GoogleFonts.inter(color: AppColors.textSecondary, fontSize: 12)),
+                            value: _isAnonymous,
+                            activeColor: AppColors.primary,
+                            onChanged: (bool value) {
+                              setState(() {
+                                _isAnonymous = value;
+                              });
+                            },
+                            secondary: Icon(Icons.privacy_tip_rounded, color: AppColors.primary),
                           ),
-                        ),
-                      ),
+                        ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.1),
+                        
+                        const SizedBox(height: 8),
+                        OceanGlassCard(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                            child: TextFormField(
+                              controller: _phoneController,
+                              keyboardType: TextInputType.phone,
+                              decoration: InputDecoration(
+                                labelText: 'Contact Number',
+                                hintText: 'e.g., 9876543210',
+                                border: InputBorder.none,
+                                prefixIcon: Icon(Icons.phone_rounded, color: AppColors.primary),
+                              ),
+                              validator: (value) {
+                                if (!_isAnonymous && (value == null || value.isEmpty)) {
+                                  return 'Please enter a contact number';
+                                }
+                                return null;
+                              },
+                            ),
+                          ),
+                        ).animate().fadeIn(delay: 100.ms).slideY(begin: 0.1),
+                        const SizedBox(height: 12),
+                        Text('Vessel Information', style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textPrimary)).animate().fadeIn(delay: 200.ms),
+                        const SizedBox(height: 12),
+                        
+                        OceanGlassCard(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                            child: DropdownButtonFormField<String>(
+                              isExpanded: true,
+                              decoration: InputDecoration(
+                                 labelText: 'Vessel Type',
+                                 border: InputBorder.none,
+                                 prefixIcon: Icon(Icons.directions_boat_rounded, color: AppColors.primary)
+                              ),
+                              value: _selectedVesselType,
+                              items: _vesselTypes.map((String value) {
+                                return DropdownMenuItem<String>(
+                                  value: value,
+                                  child: Text(value, overflow: TextOverflow.ellipsis, style: GoogleFonts.inter()),
+                                );
+                              }).toList(),
+                              onChanged: (newValue) => setState(() => _selectedVesselType = newValue),
+                              validator: (value) => value == null ? 'Please select a vessel type' : null,
+                            ),
+                          ),
+                        ).animate().fadeIn(delay: 250.ms).slideY(begin: 0.1),
+                        
+                        const SizedBox(height: 8),
+                        
+                        OceanGlassCard(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                            child: DropdownButtonFormField<String>(
+                              isExpanded: true,
+                              decoration: InputDecoration(
+                                 labelText: 'Type of Suspicious Activity',
+                                 border: InputBorder.none,
+                                 prefixIcon: Icon(Icons.warning_amber_rounded, color: AppColors.warning)
+                              ),
+                              value: _selectedActivityType,
+                              items: _activityTypes.map((String value) {
+                                return DropdownMenuItem<String>(
+                                  value: value,
+                                  child: Text(value, overflow: TextOverflow.ellipsis, style: GoogleFonts.inter()),
+                                );
+                              }).toList(),
+                              onChanged: (newValue) => setState(() => _selectedActivityType = newValue),
+                              validator: (value) => value == null ? 'Please select an activity type' : null,
+                            ),
+                          ),
+                        ).animate().fadeIn(delay: 300.ms).slideY(begin: 0.1),
+      
+                        const SizedBox(height: 8),
+                        
+                        OceanGlassCard(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                            child: TextFormField(
+                              controller: _descriptionController,
+                              maxLines: 4,
+                              decoration: InputDecoration(
+                                labelText: 'Additional Details / Description',
+                                alignLabelWithHint: true,
+                                border: InputBorder.none,
+                                suffixIcon: IconButton(
+                                  icon: Icon(
+                                    _isListening ? Icons.mic : Icons.mic_none_rounded,
+                                    color: _isListening ? AppColors.danger : AppColors.textMuted,
+                                  ),
+                                  onPressed: _listenToSpeech,
+                                ),
+                              ),
+                              validator: (value) {
+                                if (value!.isEmpty && (_audioPath == null || _audioPath!.isEmpty)) {
+                                  return 'Please provide a description or record voice evidence';
+                                }
+                                return null;
+                              },
+                            ),
+                          ),
+                        ).animate().fadeIn(delay: 350.ms).slideY(begin: 0.1),
+      
+                        const SizedBox(height: 12),
+                        Text('Evidence', style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textPrimary)).animate().fadeIn(delay: 400.ms),
+                        const SizedBox(height: 12),
+                        
+                        // Image Picker
+                        InkWell(
+                          onTap: _pickImage,
+                          child: OceanGlassCard(
+                            padding: EdgeInsets.zero,
+                            child: SizedBox(
+                              height: 100,
+                              width: double.infinity,
+                              child: _hasImage
+                                  ? Stack(
+                                      children: [
+                                        ClipRRect(
+                                          borderRadius: BorderRadius.circular(16),
+                                          child: kIsWeb
+                                              ? Image.memory(_webImage!, fit: BoxFit.cover, width: double.infinity)
+                                              : Image.file(_imageFile!, fit: BoxFit.cover, width: double.infinity),
+                                        ),
+                                        Positioned(
+                                          right: 8, top: 8,
+                                          child: IconButton(
+                                            icon: const Icon(Icons.close_rounded, color: Colors.white, shadows: [Shadow(color: Colors.black, blurRadius: 4)]),
+                                            onPressed: _deleteImage,
+                                          ),
+                                        )
+                                      ],
+                                    )
+                                  : Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.camera_alt_rounded, size: 48, color: AppColors.primary.withOpacity(0.5)),
+                                        const SizedBox(height: 8),
+                                        Text('Tap to take a photo of the vessel', style: GoogleFonts.inter(color: AppColors.textSecondary, fontWeight: FontWeight.w600))
+                                      ],
+                                    ),
+                            ),
+                          ),
+                        ).animate().fadeIn(delay: 450.ms).slideY(begin: 0.1),
+      
+                        const SizedBox(height: 12),
+                        Text('Voice Evidence', style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textPrimary)).animate().fadeIn(delay: 500.ms),
+                        const SizedBox(height: 12),
+                        
+                        OceanGlassCard(
+                          child: Row(
+                            children: [
+                              Container(
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: _isRecording ? AppColors.dangerLight : AppColors.primary.withOpacity(0.1),
+                                ),
+                                child: IconButton(
+                                  icon: Icon(_isRecording ? Icons.stop_rounded : Icons.mic_rounded, color: _isRecording ? AppColors.danger : AppColors.primary, size: 32),
+                                  onPressed: _isRecording ? _stopRecording : _startRecording,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  _isRecording ? "Recording..." : (_audioPath != null ? "Voice Evidence Recorded!" : "Tap to record voice evidence"),
+                                  style: GoogleFonts.inter(color: _isRecording ? AppColors.danger : AppColors.textPrimary, fontWeight: FontWeight.w700),
+                                ),
+                              ),
+                              if (_audioPath != null) ...[
+                                 IconButton(
+                                   icon: Icon(_isPlaying ? Icons.pause_circle_rounded : Icons.play_circle_rounded, color: AppColors.success, size: 32),
+                                   onPressed: _playAudio,
+                                 ),
+                                 IconButton(
+                                   icon: Icon(Icons.delete_rounded, color: AppColors.danger, size: 32),
+                                   onPressed: _deleteAudio,
+                                 ),
+                              ]
+                            ]
+                          )
+                        ).animate().fadeIn(delay: 550.ms).slideY(begin: 0.1),
+                        
+                        const SizedBox(height: 12),
+                        Text('Location', style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textPrimary)).animate().fadeIn(delay: 600.ms),
+                        const SizedBox(height: 8),
+                        
+                        OceanGlassCard(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                            child: Autocomplete<Map<String, dynamic>>(
+                              displayStringForOption: (option) => option['name'] as String,
+                              optionsBuilder: (TextEditingValue textEditingValue) async {
+                                return await _searchLocations(textEditingValue.text);
+                              },
+                              onSelected: (Map<String, dynamic> selection) {
+                                setState(() {
+                                  _selectedLocationData = selection;
+                                });
+                              },
+                              fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
+                                return TextFormField(
+                                  controller: controller,
+                                  focusNode: focusNode,
+                                  onEditingComplete: onEditingComplete,
+                                  decoration: InputDecoration(
+                                    labelText: 'Search Location (Village / Landmark)',
+                                    border: InputBorder.none,
+                                    prefixIcon: Icon(Icons.search_rounded, color: AppColors.primary),
+                                    suffixIcon: _isSearchingLocation
+                                        ? Padding(
+                                            padding: const EdgeInsets.all(12),
+                                            child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary)),
+                                          )
+                                        : IconButton(
+                                            icon: Icon(Icons.my_location_rounded, color: AppColors.secondary),
+                                            onPressed: () async {
+                                               await _detectCurrentLocation();
+                                               if (_selectedLocationData != null) {
+                                                 controller.text = _selectedLocationData!['name'];
+                                               }
+                                            },
+                                          ),
+                                  ),
+                                  validator: (value) => _selectedLocationData == null ? 'Please provide the location' : null,
+                                );
+                              },
+                            ),
+                          ),
+                        ).animate().fadeIn(delay: 650.ms).slideY(begin: 0.1),
+                        
+                        const SizedBox(height: 16),
+                        Container(
+                          width: double.infinity,
+                          height: 56,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(colors: AppColors.oceanGradient),
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [BoxShadow(color: AppColors.primary.withOpacity(0.4), blurRadius: 12, offset: const Offset(0, 4))],
+                          ),
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.transparent,
+                              shadowColor: Colors.transparent,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            ),
+                            onPressed: _submitComplaint,
+                            child: Text(
+                              'Submit Report Securely',
+                              style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white),
+                            ),
+                          ),
+                        ).animate().fadeIn(delay: 700.ms).slideY(begin: 0.1),
+                        const SizedBox(height: 120), // Extra space to clear the bottom navigation bar
+                      ],
                     ),
-                    
-                    // Progressive Navigation Panel
-                    _buildNavigationButtons(),
-                  ],
-                )),
+                  ))),
           // Tab 2: My Reports List
           _buildMyReports(),
         ],
@@ -447,597 +737,6 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
     ),
   );
 }
-
-  Widget _buildStepIndicator() {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
-      color: const Color(0xFF0F172A).withOpacity(0.4),
-      child: Row(
-        children: [
-          _buildStepDot(0, "Classification"),
-          _buildStepLine(0),
-          _buildStepDot(1, "Evidence"),
-          _buildStepLine(1),
-          _buildStepDot(2, "Location"),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStepDot(int stepIndex, String label) {
-    final isActive = _currentStep == stepIndex;
-    final isCompleted = _currentStep > stepIndex;
-    final Color dotColor = isCompleted 
-        ? const Color(0xFF10B981) // Green for complete
-        : (isActive ? const Color(0xFFEF4444) : const Color(0xFF64748B));
-    
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          width: 24,
-          height: 24,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: dotColor.withOpacity(0.12),
-            border: Border.all(color: dotColor, width: 2),
-            boxShadow: isActive ? [
-              BoxShadow(color: dotColor.withOpacity(0.3), blurRadius: 8, spreadRadius: 1),
-            ] : null,
-          ),
-          alignment: Alignment.center,
-          child: isCompleted 
-              ? const Icon(Icons.check, size: 12, color: Color(0xFF10B981))
-              : Text(
-                  "${stepIndex + 1}", 
-                  style: TextStyle(color: dotColor, fontSize: 10, fontWeight: FontWeight.bold),
-                ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 9, 
-            fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-            color: isActive ? Colors.white : const Color(0xFF64748B),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStepLine(int afterStep) {
-    final isPassed = _currentStep > afterStep;
-    return Expanded(
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: 14.0),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 400),
-          height: 2,
-          color: isPassed ? const Color(0xFF10B981) : Colors.white.withOpacity(0.08),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStep1() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildWarningBanner(),
-        const SizedBox(height: 20),
-        
-        GlassCard(
-          borderRadius: 16,
-          blur: 10,
-          backgroundColor: const Color(0xFF1E293B).withOpacity(0.4),
-          borderColor: Colors.white.withOpacity(0.06),
-          padding: const EdgeInsets.all(18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                "Anonymity Settings",
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
-              ),
-              const SizedBox(height: 12),
-              SwitchListTile(
-                title: const Text('Submit Anonymously', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 14)),
-                subtitle: const Text(
-                  'Your name & details will be entirely hidden from authorities.',
-                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
-                ),
-                contentPadding: EdgeInsets.zero,
-                value: _isAnonymous,
-                activeColor: const Color(0xFFEF4444),
-                onChanged: (bool value) {
-                  setState(() {
-                    _isAnonymous = value;
-                  });
-                },
-                secondary: const Icon(Icons.privacy_tip, color: Color(0xFF06B6D4)),
-              ),
-              if (!_isAnonymous) ...[
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _phoneController,
-                  keyboardType: TextInputType.phone,
-                  style: const TextStyle(color: Colors.white, fontSize: 14),
-                  decoration: InputDecoration(
-                    labelText: 'Contact Number',
-                    labelStyle: const TextStyle(color: Color(0xFF64748B)),
-                    hintText: 'e.g., 9876543210',
-                    hintStyle: const TextStyle(color: Color(0xFF334155)),
-                    filled: true,
-                    fillColor: const Color(0xFF090D16),
-                    prefixIcon: const Icon(Icons.phone, color: Color(0xFF6366F1), size: 20),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.white.withOpacity(0.04))),
-                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF6366F1))),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-        
-        const SizedBox(height: 20),
-        
-        GlassCard(
-          borderRadius: 16,
-          blur: 10,
-          backgroundColor: const Color(0xFF1E293B).withOpacity(0.4),
-          borderColor: Colors.white.withOpacity(0.06),
-          padding: const EdgeInsets.all(18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                "Vessel & Activity Category",
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                isExpanded: true,
-                dropdownColor: const Color(0xFF0F172A),
-                style: const TextStyle(color: Colors.white, fontSize: 13),
-                decoration: InputDecoration(
-                   labelText: 'Vessel Type',
-                   labelStyle: const TextStyle(color: Color(0xFF64748B)),
-                   filled: true,
-                   fillColor: const Color(0xFF090D16),
-                   prefixIcon: const Icon(Icons.directions_boat, color: Color(0xFF06B6D4), size: 20),
-                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                   enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.white.withOpacity(0.04))),
-                ),
-                value: _selectedVesselType,
-                items: _vesselTypes.map((String value) {
-                  return DropdownMenuItem<String>(
-                    value: value,
-                    child: Text(value, overflow: TextOverflow.ellipsis),
-                  );
-                }).toList(),
-                onChanged: (newValue) => setState(() => _selectedVesselType = newValue),
-                validator: (value) => value == null ? 'Please select a vessel type' : null,
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                isExpanded: true,
-                dropdownColor: const Color(0xFF0F172A),
-                style: const TextStyle(color: Colors.white, fontSize: 13),
-                decoration: InputDecoration(
-                   labelText: 'Suspicious Activity Type',
-                   labelStyle: const TextStyle(color: Color(0xFF64748B)),
-                   filled: true,
-                   fillColor: const Color(0xFF090D16),
-                   prefixIcon: const Icon(Icons.warning_amber, color: Color(0xFFEF4444), size: 20),
-                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                   enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.white.withOpacity(0.04))),
-                ),
-                value: _selectedActivityType,
-                items: _activityTypes.map((String value) {
-                  return DropdownMenuItem<String>(
-                    value: value,
-                    child: Text(value, overflow: TextOverflow.ellipsis),
-                  );
-                }).toList(),
-                onChanged: (newValue) => setState(() => _selectedActivityType = newValue),
-                validator: (value) => value == null ? 'Please select an activity type' : null,
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStep2() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        GlassCard(
-          borderRadius: 16,
-          blur: 10,
-          backgroundColor: const Color(0xFF1E293B).withOpacity(0.45),
-          borderColor: Colors.white.withOpacity(0.06),
-          padding: const EdgeInsets.all(18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                "Incident Narrative",
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _descriptionController,
-                maxLines: 4,
-                style: const TextStyle(color: Colors.white, fontSize: 13, height: 1.4),
-                decoration: InputDecoration(
-                  labelText: 'Narrative Description',
-                  labelStyle: const TextStyle(color: Color(0xFF64748B)),
-                  alignLabelWithHint: true,
-                  filled: true,
-                  fillColor: const Color(0xFF090D16),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.white.withOpacity(0.04))),
-                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF6366F1))),
-                  suffixIcon: Container(
-                    margin: const EdgeInsets.only(top: 8, right: 8),
-                    decoration: BoxDecoration(
-                      color: _isListening ? const Color(0xFFEF4444).withOpacity(0.15) : Colors.white.withOpacity(0.03),
-                      shape: BoxShape.circle,
-                    ),
-                    child: IconButton(
-                      icon: Icon(
-                        _isListening ? Icons.mic : Icons.mic_none,
-                        color: _isListening ? const Color(0xFFEF4444) : const Color(0xFF06B6D4),
-                        size: 20,
-                      ),
-                      onPressed: _listenToSpeech,
-                    ),
-                  ),
-                ),
-                validator: (value) {
-                  if (value!.isEmpty && (_audioPath == null || _audioPath!.isEmpty)) {
-                    return 'Please provide a description or record voice evidence';
-                  }
-                  return null;
-                },
-              ),
-            ],
-          ),
-        ),
-        
-        const SizedBox(height: 20),
-        
-        // Custom Glass Polaroid Card for image evidence
-        const Text(
-          "Photo Evidence (Polaroid Capture)",
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
-        ),
-        const SizedBox(height: 10),
-        
-        Center(
-          child: InkWell(
-            onTap: _pickImage,
-            borderRadius: BorderRadius.circular(16),
-            child: Container(
-              width: 250,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.35),
-                    blurRadius: 15,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    height: 180,
-                    width: double.infinity,
-                    color: const Color(0xFF090D16),
-                    child: (_imageFile != null || _webImage != null)
-                        ? kIsWeb
-                            ? Image.memory(_webImage!, fit: BoxFit.cover)
-                            : Image.file(_imageFile!, fit: BoxFit.cover)
-                        : Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: const [
-                              Icon(Icons.camera_alt, size: 40, color: Color(0xFF64748B)),
-                              SizedBox(height: 8),
-                              Text(
-                                'Tap to take picture', 
-                                style: TextStyle(color: Color(0xFF64748B), fontSize: 11, fontWeight: FontWeight.bold),
-                              )
-                            ],
-                          ),
-                  ),
-                  const SizedBox(height: 14),
-                  const Text(
-                    "EVIDENCE PHOTO",
-                    style: TextStyle(
-                      fontFamily: 'Courier', 
-                      fontWeight: FontWeight.bold, 
-                      fontSize: 11, 
-                      color: Colors.black54,
-                      letterSpacing: 1.5,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                ],
-              ),
-            ),
-          ),
-        ),
-        
-        const SizedBox(height: 20),
-        
-        const Text("Voice Audio Evidence", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
-        const SizedBox(height: 10),
-        
-        GlassCard(
-          borderRadius: 16,
-          blur: 10,
-          backgroundColor: const Color(0xFF1E293B).withOpacity(0.4),
-          borderColor: Colors.white.withOpacity(0.06),
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              IconButton(
-                icon: Icon(
-                  _isRecording ? Icons.stop_circle : Icons.mic, 
-                  color: _isRecording ? const Color(0xFFEF4444) : const Color(0xFF3B82F6), 
-                  size: 34,
-                ),
-                onPressed: _isRecording ? _stopRecording : _startRecording,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _isRecording ? "Recording Audio..." : (_audioPath != null ? "Voice Evidence Captured!" : "Secure Voice Memo"),
-                      style: TextStyle(
-                        color: _isRecording ? const Color(0xFFEF4444) : Colors.white, 
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _isRecording ? "Authorities are listening..." : "Tap to speak and record raw narrative details",
-                      style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
-                    ),
-                  ],
-                ),
-              ),
-              if (_audioPath != null) ...[
-                 IconButton(
-                   icon: Icon(_isPlaying ? Icons.pause_circle : Icons.play_circle, color: const Color(0xFF10B981), size: 32),
-                   onPressed: _playAudio,
-                 ),
-                 IconButton(
-                   icon: const Icon(Icons.delete, color: Color(0xFFEF4444), size: 30),
-                   onPressed: _deleteAudio,
-                 ),
-              ]
-            ]
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStep3() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        GlassCard(
-          borderRadius: 16,
-          blur: 10,
-          backgroundColor: const Color(0xFF1E293B).withOpacity(0.4),
-          borderColor: Colors.white.withOpacity(0.06),
-          padding: const EdgeInsets.all(18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                "Incident Geofencing",
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
-              ),
-              const SizedBox(height: 14),
-              Autocomplete<Map<String, dynamic>>(
-                displayStringForOption: (option) => option['name'] as String,
-                optionsBuilder: (TextEditingValue textEditingValue) async {
-                  return await _searchLocations(textEditingValue.text);
-                },
-                onSelected: (Map<String, dynamic> selection) {
-                  setState(() {
-                    _selectedLocationData = selection;
-                  });
-                },
-                fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
-                  if (_selectedLocationData != null && textEditingController.text != _selectedLocationData!['name']) {
-                     textEditingController.text = _selectedLocationData!['name'];
-                  }
-
-                  return TextFormField(
-                    controller: textEditingController,
-                    focusNode: focusNode,
-                    onEditingComplete: onFieldSubmitted,
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
-                    decoration: InputDecoration(
-                      labelText: 'Search Location Coordinates',
-                      labelStyle: const TextStyle(color: Color(0xFF64748B)),
-                      filled: true,
-                      fillColor: const Color(0xFF090D16),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.white.withOpacity(0.04))),
-                      prefixIcon: const Icon(Icons.location_on, color: Color(0xFF06B6D4), size: 20),
-                      suffixIcon: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (_selectedLocationData != null) 
-                            const Icon(Icons.check_circle, color: Color(0xFF10B981), size: 20),
-                          if (_isSearchingLocation)
-                             const Padding(padding: EdgeInsets.all(12), child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF06B6D4)))),
-                          IconButton(
-                            icon: Icon(Icons.my_location, color: _isSearchingLocation ? const Color(0xFF3B82F6) : const Color(0xFF94A3B8), size: 20),
-                            onPressed: _isSearchingLocation ? null : _detectCurrentLocation,
-                            tooltip: 'Use current location',
-                          ),
-                        ],
-                      ),
-                    ),
-                    onChanged: (value) {
-                       if (_selectedLocationData != null && value != _selectedLocationData!['name']) {
-                          setState(() {
-                             _selectedLocationData = null; 
-                          });
-                       }
-                    },
-                    validator: (value) => _selectedLocationData == null ? 'Please select a predefined location' : null,
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-        
-        const SizedBox(height: 20),
-        
-        const Text("Review Summary", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
-        const SizedBox(height: 10),
-        
-        GlassCard(
-          borderRadius: 16,
-          blur: 10,
-          backgroundColor: const Color(0xFF1E293B).withOpacity(0.2),
-          borderColor: Colors.white.withOpacity(0.04),
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              _buildReviewRow("Submission type:", _isAnonymous ? "Anonymous Report" : "Standard Profile"),
-              _buildReviewRow("Activity Type:", _selectedActivityType ?? "Not Specified"),
-              _buildReviewRow("Vessel Identified:", _selectedVesselType ?? "Not Specified"),
-              _buildReviewRow("Narrative Info:", _descriptionController.text.isNotEmpty ? "Provided (${_descriptionController.text.length} chars)" : "Audio Evidence Only"),
-              _buildReviewRow("GPS Lock:", _selectedLocationData != null ? "VALID COORDINATES" : "NOT SELECTED", isAccent: true),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildReviewRow(String label, String value, {bool isAccent = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: const TextStyle(color: Color(0xFF64748B), fontSize: 12)),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              value, 
-              style: TextStyle(
-                color: isAccent ? const Color(0xFF10B981) : Colors.white, 
-                fontWeight: FontWeight.bold, 
-                fontSize: 12,
-              ),
-              textAlign: TextAlign.end,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNavigationButtons() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
-        border: Border(top: BorderSide(color: Colors.white.withOpacity(0.08))),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // Back Button
-          if (_currentStep > 0)
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.only(right: 12.0),
-                child: OutlinedButton(
-                  onPressed: () {
-                    setState(() {
-                      _currentStep--;
-                    });
-                  },
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF94A3B8),
-                    side: BorderSide(color: Colors.white.withOpacity(0.08)),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  child: const Text("Previous", style: TextStyle(fontWeight: FontWeight.bold)),
-                ),
-              ),
-            )
-          else
-            const Spacer(),
-            
-          // Next / Submit Button
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(10),
-                gradient: LinearGradient(
-                  colors: _currentStep == 2 
-                      ? [const Color(0xFFEF4444), const Color(0xFFDC2626)]
-                      : [const Color(0xFF6366F1), const Color(0xFF4F46E5)],
-                ),
-              ),
-              child: ElevatedButton(
-                onPressed: () {
-                  if (_currentStep < 2) {
-                    if (_formKey.currentState!.validate() || _currentStep == 1) {
-                      setState(() {
-                        _currentStep++;
-                      });
-                    }
-                  } else {
-                    _submitComplaint();
-                  }
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.transparent,
-                  foregroundColor: Colors.white,
-                  shadowColor: Colors.transparent,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-                child: Text(
-                  _currentStep == 2 ? "File Complaint" : "Continue", 
-                  style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildMyReports() {
     return StreamBuilder<QuerySnapshot>(
@@ -1047,34 +746,32 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator(color: Color(0xFFEF4444)));
+          return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.hasError) {
-          return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.redAccent)));
+          return Center(child: Text('Error: ${snapshot.error}'));
         }
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return Center(
+          return const Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.history, size: 64, color: Colors.white.withOpacity(0.12)),
-                const SizedBox(height: 16),
-                const Text(
-                  'No reports recorded yet.', 
-                  style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold),
-                ),
+                Icon(Icons.history, size: 64, color: Colors.grey),
+                SizedBox(height: 16),
+                Text('You haven\'t submitted any reports yet.', style: TextStyle(color: Colors.grey)),
               ],
             ),
           );
         }
 
+        // Sort in-memory to avoid requiring a composite index
         final docs = snapshot.data!.docs;
         docs.sort((a, b) {
           final aTime = (a.data() as Map<String, dynamic>)['timestamp'] as Timestamp?;
           final bTime = (b.data() as Map<String, dynamic>)['timestamp'] as Timestamp?;
           if (aTime == null) return 1;
           if (bTime == null) return -1;
-          return bTime.compareTo(aTime); 
+          return bTime.compareTo(aTime); // Descending
         });
 
         return ListView.builder(
@@ -1091,18 +788,11 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
 
   Widget _buildAcknowledgementCard(Map<String, dynamic> data) {
     String status = data['status'] ?? 'Pending';
-    Color statusColor = status == 'Action Taken' 
-        ? const Color(0xFF10B981) // Emerald
-        : (status == 'Dismissed' ? const Color(0xFFEF4444) : const Color(0xFFF59E0B));
+    Color statusColor = status == 'Action Taken' ? AppColors.success : (status == 'Dismissed' ? AppColors.danger : AppColors.warning);
     DateTime? date = data['timestamp'] != null ? (data['timestamp'] as Timestamp).toDate() : null;
 
-    return GlassCard(
-      borderRadius: 16,
-      blur: 10,
-      backgroundColor: const Color(0xFF1E293B).withOpacity(0.4),
-      borderColor: statusColor.withOpacity(0.2),
+    return OceanGlassCard(
       padding: const EdgeInsets.all(16),
-      margin: const EdgeInsets.only(bottom: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1112,21 +802,19 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
               Expanded(
                 child: Text(
                   data['activityType'] ?? 'Unknown Activity',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white),
-                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 16, color: AppColors.textPrimary),
                 ),
               ),
-              const SizedBox(width: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.12),
+                  color: statusColor.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: statusColor.withOpacity(0.3), width: 1),
+                  border: Border.all(color: statusColor.withOpacity(0.3)),
                 ),
                 child: Text(
                   status,
-                  style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 9, letterSpacing: 0.5),
+                  style: GoogleFonts.inter(color: statusColor, fontWeight: FontWeight.w800, fontSize: 11, letterSpacing: 0.5),
                 ),
               ),
             ],
@@ -1134,126 +822,133 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
           const SizedBox(height: 8),
           if (date != null)
             Text(
-              "Submitted: ${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute}",
-              style: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+              "Submitted on: ${date.day}/${date.month}/${date.year}",
+              style: GoogleFonts.inter(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w500),
             ),
-          const Divider(height: 24, color: Colors.white10),
+          Divider(height: 24, color: AppColors.border),
           if (data['acknowledgementMessage'] != null) ...[
-            const Text(
+            Text(
               "Message from Authority:",
-              style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF3B82F6), fontSize: 12),
+              style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: AppColors.primary, fontSize: 13),
             ),
             const SizedBox(height: 8),
             Container(
-              padding: const EdgeInsets.all(10),
-              width: double.infinity,
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFF090D16),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.white.withOpacity(0.04)),
+                color: AppColors.primary.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.primary.withOpacity(0.1)),
               ),
               child: Text(
                 data['acknowledgementMessage'],
-                style: const TextStyle(color: Colors.white70, fontSize: 12, height: 1.4),
+                style: GoogleFonts.inter(height: 1.5, fontSize: 13, color: AppColors.textPrimary),
               ),
             ),
           ] else ...[
-            const Row(
+            Row(
               children: [
-                 Icon(Icons.hourglass_empty, size: 14, color: Color(0xFF64748B)),
-                 SizedBox(width: 8),
-                 Text("Pending official review...", style: TextStyle(color: Color(0xFF64748B), fontStyle: FontStyle.italic, fontSize: 11)),
+                 Icon(Icons.hourglass_empty_rounded, size: 16, color: AppColors.textMuted),
+                 const SizedBox(width: 8),
+                 Text("Waiting for authority response...", style: GoogleFonts.inter(color: AppColors.textMuted, fontStyle: FontStyle.italic, fontSize: 13)),
               ],
             ),
           ],
         ],
       ),
-    );
+    ).animate().fadeIn().slideY(begin: 0.1);
   }
 
   Widget _buildWarningBanner() {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFEF3C7).withOpacity(0.03),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFD97706).withOpacity(0.2)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.shield, color: Color(0xFFF59E0B), size: 20),
-          const SizedBox(width: 12),
-          const Expanded(
-            child: Text(
-              'Your safety is our priority. If you feel threatened, please submit the report anonymously. Do not approach suspicious vessels directly.',
-              style: TextStyle(color: Color(0xFFF59E0B), height: 1.4, fontSize: 11),
+    return OceanGlassCard(
+      padding: EdgeInsets.zero,
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.dangerLight.withOpacity(0.3),
+          border: Border(left: BorderSide(color: AppColors.danger, width: 4)),
+        ),
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.danger.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.warning_rounded, color: AppColors.danger),
             ),
-          )
-        ],
-      )
-    );
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("Strict Action Guaranteed", style: GoogleFonts.inter(fontWeight: FontWeight.w800, color: AppColors.danger)),
+                  const SizedBox(height: 4),
+                  Text(
+                    "Any false reporting will lead to penalty. Please provide accurate evidence.",
+                    style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    ).animate().fadeIn(duration: 400.ms);
   }
 
   Widget _buildSuccessScreen() {
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(28.0),
-        child: GlassCard(
-          borderRadius: 24,
-          blur: 15,
-          backgroundColor: const Color(0xFF1E293B).withOpacity(0.4),
-          borderColor: Colors.white.withOpacity(0.08),
-          padding: const EdgeInsets.all(28),
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.only(left: 32.0, right: 32.0, top: 32.0, bottom: 150.0),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.check_circle_outline, color: Color(0xFF10B981), size: 76),
-              const SizedBox(height: 20),
-              const Text(
-                'Report Filed Successfully',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 0.5),
-                textAlign: TextAlign.center,
+          children: [
+            const Icon(Icons.check_circle, color: Colors.green, size: 80),
+            const SizedBox(height: 12),
+            const Text(
+              'Thank you for reporting.',
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Your complaint has been recorded and will be reviewed by the authorities. You can track progress in the "My Reports" tab.',
+              style: TextStyle(fontSize: 16, color: Colors.grey.shade700, height: 1.5),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade300)
               ),
-              const SizedBox(height: 12),
-              const Text(
-                'Your complaint has been encrypted and recorded securely. Authorities have been alerted on their GIS dashboard. Monitor status in the history tab.',
-                style: TextStyle(fontSize: 13, color: Color(0xFF94A3B8), height: 1.5),
-                textAlign: TextAlign.center,
+              child: Column(
+                children: [
+                  Text('Complaint ID:', style: TextStyle(color: Colors.grey.shade600)),
+                  const SizedBox(height: 4),
+                  Text(
+                    _submittedComplaintId ?? 'Unknown',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                  const Divider(height: 24),
+                  Text('Status:', style: TextStyle(color: Colors.grey.shade600)),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Pending Review',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.orange),
+                  ),
+                ],
               ),
-              const SizedBox(height: 24),
-              Container(
-                padding: const EdgeInsets.all(16),
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF090D16),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white.withOpacity(0.04))
-                ),
-                child: Column(
-                  children: [
-                    const Text('Incident Identifier:', style: TextStyle(color: Color(0xFF64748B), fontSize: 11, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 6),
-                    SelectableText(
-                      _submittedComplaintId ?? 'Unknown',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF06B6D4), fontFamily: 'monospace'),
-                      textAlign: TextAlign.center,
-                    ),
-                    const Divider(height: 24, color: Colors.white10),
-                    const Text('Initial Status:', style: TextStyle(color: Color(0xFF64748B), fontSize: 11, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 6),
-                    const Text(
-                      'PENDING EXECUTIVE REVIEW',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFFF59E0B), letterSpacing: 0.5),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
+      ),
       ),
     );
   }
 }
+

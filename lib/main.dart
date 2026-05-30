@@ -60,21 +60,18 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'AgriConnect',
-      theme: AppTheme.darkTheme.copyWith(
-        textTheme: GoogleFonts.latoTextTheme(
-          ThemeData.dark().textTheme,
-        ),
-      ),
-      darkTheme: AppTheme.darkTheme.copyWith(
-        textTheme: GoogleFonts.latoTextTheme(
-          ThemeData.dark().textTheme,
-        ),
-      ),
-      themeMode: ThemeMode.dark,
-      home: const LandingPage(),
-      debugShowCheckedModeBanner: false,
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: AppTheme.themeNotifier,
+      builder: (context, currentThemeMode, _) {
+        return MaterialApp(
+          title: 'GIS Smart Pisciculture',
+          theme: AppTheme.lightTheme,
+          darkTheme: AppTheme.darkTheme,
+          themeMode: currentThemeMode,
+          home: const LandingPage(),
+          debugShowCheckedModeBanner: false,
+        );
+      },
     );
   }
 }

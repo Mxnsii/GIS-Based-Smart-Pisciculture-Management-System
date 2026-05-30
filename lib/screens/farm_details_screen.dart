@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'gis_map_view.dart';
 import '../widgets/custom_back_button.dart';
-import '../widgets/glass_card.dart';
+import '../widgets/ocean_glass_card.dart';
+import '../widgets/master_ocean_background.dart';
+import '../theme/app_theme.dart';
 
 class FarmDetailsScreen extends StatefulWidget {
   final Map<String, dynamic> farmData;
@@ -30,45 +33,45 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
     // show a restricted screen (users should not see the farm details).
     if (!widget.isAuthority && isInactive) {
       return Scaffold(
-        backgroundColor: const Color(0xFF090D16), // Premium dark mode background
+        backgroundColor: Colors.transparent, // Allow MasterOceanBackground to show
         appBar: AppBar(
-          title: const Text(
+          title: Text(
             'Farm Details',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            style: GoogleFonts.inter(color: AppColors.textPrimary, fontWeight: FontWeight.bold),
           ),
-          backgroundColor: const Color(0xFF0F172A),
+          backgroundColor: Colors.transparent,
           elevation: 0,
           automaticallyImplyLeading: false,
           leading: CustomBackButton(
             onPressed: () => Navigator.pop(context),
           ),
         ),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: GlassCard(
-              borderRadius: 20,
-              blur: 15,
-              backgroundColor: const Color(0xFF1E293B).withOpacity(0.4),
-              borderColor: Colors.redAccent.withOpacity(0.2),
-              padding: const EdgeInsets.all(32),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: const [
-                  Icon(Icons.block, size: 72, color: Colors.redAccent),
-                  SizedBox(height: 20),
-                  Text(
-                    'Access Restricted',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
-                  ),
-                  SizedBox(height: 12),
-                  Text(
-                    'This farm is currently inactive. Details are restricted to authorized personnel only.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 14, color: Color(0xFF94A3B8), height: 1.5),
-                  ),
-                ],
+        body: MasterOceanBackground(
+          showFishes: true,
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: OceanGlassCard(
+                borderRadius: 20,
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.block, size: 72, color: AppColors.danger),
+                    const SizedBox(height: 20),
+                    Text(
+                      'Access Restricted',
+                      style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'This farm is currently inactive. Details are restricted to authorized personnel only.',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.inter(fontSize: 14, color: AppColors.textSecondary, height: 1.5),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -77,13 +80,13 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFF090D16), // Premium dark mode background
+      backgroundColor: Colors.transparent, // Allow MasterOceanBackground to show
       appBar: AppBar(
         title: Text(
           widget.farmData['name'] ?? 'Farm Details',
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+          style: GoogleFonts.inter(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 18),
         ),
-        backgroundColor: const Color(0xFF0F172A),
+        backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,
         automaticallyImplyLeading: false,
@@ -94,54 +97,60 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1.0),
           child: Container(
-            color: Colors.white.withOpacity(0.08),
+            color: AppColors.divider,
             height: 1.0,
           ),
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildHeaderCard(),
-            const SizedBox(height: 24),
-            _buildSectionTitle('📍 GIS & Location'),
-            _buildGisSection(context),
-            const SizedBox(height: 24),
-            // Updated Section Title
-            _buildSectionTitle('📈 Real-Time Diagnostics'),
-            _buildInsightsSection(), // Replaces _buildWaterQualitySection
-            const SizedBox(height: 24),
+      body: MasterOceanBackground(
+        showFishes: true,
+        child: SafeArea(
+          bottom: false,
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 150),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildHeaderCard(),
+                const SizedBox(height: 24),
+                _buildSectionTitle('📍 GIS & Location'),
+                _buildGisSection(context),
+                const SizedBox(height: 24),
+                // Updated Section Title
+                _buildSectionTitle('📈 Real-Time Diagnostics'),
+                _buildInsightsSection(), // Replaces _buildWaterQualitySection
+                const SizedBox(height: 24),
 
-            // Conditionally show extended sections.
-            if (!hideSections) ...[
-              _buildSectionTitle('🐠 Fish Stock Details'),
-              _buildStockSection(),
-              const SizedBox(height: 24),
-              _buildSectionTitle('⚠️ Biosecurity Risk & Alerts'),
-              _buildRiskSection(),
-              const SizedBox(height: 24),
-              _buildSectionTitle('💰 Financials & Operations'),
-              _buildFinancialSection(),
-              const SizedBox(height: 24),
-            ],
+                // Conditionally show extended sections.
+                if (!hideSections) ...[
+                  _buildSectionTitle('🐠 Fish Stock Details'),
+                  _buildStockSection(),
+                  const SizedBox(height: 24),
+                  _buildSectionTitle('⚠️ Biosecurity Risk & Alerts'),
+                  _buildRiskSection(),
+                  const SizedBox(height: 24),
+                  _buildSectionTitle('💰 Financials & Operations'),
+                  _buildFinancialSection(),
+                  const SizedBox(height: 24),
+                ],
 
-            // Documents should be shown in all cases but with certain sensitive
-            // entries removed for Active/Pending/Rejected as requested.
-            _buildSectionTitle('📑 Documentation & Verification'),
-            _buildDocumentsSection(excludeSensitive: hideSections),
-            const SizedBox(height: 24),
+                // Documents should be shown in all cases
+                _buildSectionTitle('📑 Documentation & Verification'),
+                _buildDocumentsSection(excludeSensitive: hideSections),
+                const SizedBox(height: 24),
 
-            if (!hideSections) ...[
-              _buildSectionTitle('📊 Performance Analytics'),
-              _buildAnalyticsSection(),
-              const SizedBox(height: 24),
-              _buildSectionTitle('🔐 Compliance & Approvals'),
-              _buildWorkflowSection(),
-            ],
-            const SizedBox(height: 32),
-          ],
+                if (!hideSections) ...[
+                  _buildSectionTitle('📊 Performance Analytics'),
+                  _buildAnalyticsSection(),
+                  const SizedBox(height: 24),
+                  _buildSectionTitle('🔐 Compliance & Approvals'),
+                  _buildWorkflowSection(),
+                ],
+                const SizedBox(height: 32),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -156,8 +165,8 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
             width: 4,
             height: 18,
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF06B6D4), Color(0xFF6366F1)],
+              gradient: LinearGradient(
+                colors: AppColors.oceanGradient,
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
               ),
@@ -167,10 +176,10 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
           const SizedBox(width: 10),
           Text(
             title,
-            style: const TextStyle(
+            style: GoogleFonts.inter(
               fontSize: 16,
               fontWeight: FontWeight.bold,
-              color: Colors.white,
+              color: AppColors.textPrimary,
               letterSpacing: 0.5,
             ),
           ),
@@ -179,14 +188,11 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
     );
   }
 
-  Widget _buildCard({required Widget child, Color? color}) {
-    return GlassCard(
+  Widget _buildCard({required Widget child}) {
+    return OceanGlassCard(
       borderRadius: 16.0,
-      blur: 12.0,
-      backgroundColor: color ?? const Color(0xFF1E293B).withOpacity(0.45),
-      borderColor: Colors.white.withOpacity(0.08),
       padding: const EdgeInsets.all(18),
-      margin: const EdgeInsets.only(bottom: 4),
+      margin: const EdgeInsets.only(bottom: 12),
       child: child,
     );
   }
@@ -206,8 +212,8 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
                   children: [
                     Text(
                       'Farm ID: ${widget.farmData['id'] ?? 'N/A'}',
-                      style: const TextStyle(
-                        color: Color(0xFF06B6D4), 
+                      style: GoogleFonts.inter(
+                        color: AppColors.primary, 
                         fontWeight: FontWeight.bold, 
                         fontSize: 12,
                         letterSpacing: 0.5,
@@ -216,10 +222,10 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
                     const SizedBox(height: 6),
                     Text(
                       widget.farmData['owner'] ?? 'Unknown Owner',
-                      style: const TextStyle(
+                      style: GoogleFonts.inter(
                         fontSize: 22, 
                         fontWeight: FontWeight.bold, 
-                        color: Colors.white,
+                        color: AppColors.textPrimary,
                         letterSpacing: 0.3,
                       ),
                     ),
@@ -233,7 +239,7 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
           const SizedBox(height: 16),
           Container(
             height: 1,
-            color: Colors.white.withOpacity(0.08),
+            color: AppColors.divider,
           ),
           const SizedBox(height: 16),
           _buildInfoRow(Icons.phone, widget.farmData['contact'] ?? 'N/A'),
@@ -274,7 +280,7 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
                     Container(
                       width: 1,
                       height: 32,
-                      color: Colors.white.withOpacity(0.08),
+                      color: AppColors.divider,
                     ),
                     _buildDetailItem('Longitude', '${widget.farmData['lng'] ?? 0.0}'),
                   ],
@@ -283,7 +289,6 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
             ],
           ),
           const SizedBox(height: 18),
-          // If farm is inactive we do not show extension navigation (e.g. map)
           finalStatusMapButton(context),
         ],
       ),
@@ -301,12 +306,12 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
       width: double.infinity,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
-        gradient: const LinearGradient(
-          colors: [Color(0xFF6366F1), Color(0xFF4F46E5)],
+        gradient: LinearGradient(
+          colors: AppColors.oceanGradient,
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF6366F1).withOpacity(0.3),
+            color: AppColors.primary.withOpacity(0.3),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -363,24 +368,24 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 'Real-time Trends',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
+                style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
               ),
               // Metric Selector Dropdown
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0F172A),
+                  color: AppColors.cardLight,
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.white.withOpacity(0.08)),
+                  border: Border.all(color: AppColors.border),
                 ),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<String>(
-                    dropdownColor: const Color(0xFF0F172A),
+                    dropdownColor: AppColors.surface,
                     value: _selectedMetric,
                     isDense: true,
-                    icon: const Icon(Icons.arrow_drop_down, size: 20, color: Color(0xFF06B6D4)),
+                    icon: Icon(Icons.arrow_drop_down, size: 20, color: AppColors.primary),
                     onChanged: (String? value) {
                       if (value != null) {
                         setState(() {
@@ -393,7 +398,7 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
                         value: value,
                         child: Text(
                           value, 
-                          style: const TextStyle(fontSize: 13, color: Colors.white, fontWeight: FontWeight.w500),
+                          style: GoogleFonts.inter(fontSize: 13, color: AppColors.textPrimary, fontWeight: FontWeight.w500),
                         ),
                       );
                     }).toList(),
@@ -406,11 +411,11 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
           Center(
             child: Text(
               '${_selectedMetric.toUpperCase()} ${_getMetricUnit().isNotEmpty ? '(${_getMetricUnit()})' : ''}',
-              style: const TextStyle(
+              style: GoogleFonts.inter(
                 fontSize: 14, 
                 fontWeight: FontWeight.bold, 
                 letterSpacing: 1.5,
-                color: Color(0xFF94A3B8),
+                color: AppColors.textSecondary,
               ),
             ),
           ),
@@ -425,15 +430,15 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator(color: Color(0xFF06B6D4)));
+                  return Center(child: CircularProgressIndicator(color: AppColors.secondary));
                 }
 
                 if (snapshot.hasError) {
-                  return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.redAccent)));
+                  return Center(child: Text('Error: ${snapshot.error}', style: TextStyle(color: AppColors.danger)));
                 }
 
                 if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return const Center(child: Text('No data available', style: TextStyle(color: Color(0xFF94A3B8))));
+                  return Center(child: Text('No data available', style: GoogleFonts.inter(color: AppColors.textSecondary)));
                 }
 
                 // 1. Process Data
@@ -468,7 +473,7 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
                 }
 
                 if (chartData.isEmpty) {
-                  return const Center(child: Text('No valid data for selected metric', style: TextStyle(color: Color(0xFF94A3B8))));
+                  return Center(child: Text('No valid data for selected metric', style: GoogleFonts.inter(color: AppColors.textSecondary)));
                 }
 
                 // 2. Prepare Spots and Min/Max
@@ -510,7 +515,7 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
                         horizontalInterval: yRange / 5, // Approx 5 lines
                         getDrawingHorizontalLine: (value) {
                           return FlLine(
-                            color: Colors.white.withOpacity(0.04),
+                            color: AppColors.divider.withOpacity(0.4),
                             strokeWidth: 1,
                           );
                         },
@@ -532,8 +537,8 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
                                   padding: const EdgeInsets.only(top: 8.0),
                                   child: Text(
                                     DateFormat('MM/dd').format(date), // e.g. 10/24
-                                    style: const TextStyle(
-                                      color: Color(0xFF64748B),
+                                    style: GoogleFonts.inter(
+                                      color: AppColors.textSecondary,
                                       fontWeight: FontWeight.bold,
                                       fontSize: 9,
                                     ),
@@ -551,8 +556,8 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
                             getTitlesWidget: (value, meta) {
                               return Text(
                                 value.toStringAsFixed(1),
-                                style: const TextStyle(
-                                  color: Color(0xFF64748B),
+                                style: GoogleFonts.inter(
+                                  color: AppColors.textSecondary,
                                   fontSize: 9,
                                   fontWeight: FontWeight.w500,
                                 ),
@@ -614,15 +619,15 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
                               String unit = _getMetricUnit();
                               return LineTooltipItem(
                                 '${DateFormat('MMM d, h:mm a').format(date)}\n',
-                                const TextStyle(
-                                  color: Colors.white70,
+                                GoogleFonts.inter(
+                                  color: AppColors.textSecondary,
                                   fontWeight: FontWeight.bold,
                                   fontSize: 10,
                                 ),
                                 children: [
                                   TextSpan(
                                     text: '${flSpot.y} $unit',
-                                    style: TextStyle(
+                                    style: GoogleFonts.inter(
                                       color: primaryColor,
                                       fontWeight: FontWeight.w900,
                                       fontSize: 13,
@@ -633,8 +638,8 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
                             }).toList();
                           },
                           tooltipRoundedRadius: 10,
-                          tooltipBorder: BorderSide(color: Colors.white.withOpacity(0.12), width: 1),
-                          getTooltipColor: (LineBarSpot touchedSpot) => const Color(0xFF0F172A).withOpacity(0.95),
+                          tooltipBorder: BorderSide(color: AppColors.border, width: 1),
+                          getTooltipColor: (LineBarSpot touchedSpot) => AppColors.surface.withOpacity(0.95),
                           tooltipPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                           fitInsideHorizontally: true,
                           fitInsideVertically: true,
@@ -667,10 +672,10 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
         children: [
           _buildDetailRow('Species', widget.farmData['species'] ?? 'N/A'),
           _buildDetailRow('Quantity', widget.farmData['quantity'] ?? 'N/A'),
-          const Divider(height: 20, color: Colors.white10),
+          Divider(height: 20, color: AppColors.divider),
           _buildDetailRow('Stock Date', widget.farmData['stockDate'] ?? 'N/A'),
           _buildDetailRow('Harvest Date', widget.farmData['harvestDate'] ?? 'N/A'),
-          const Divider(height: 20, color: Colors.white10),
+          Divider(height: 20, color: AppColors.divider),
           _buildDetailRow('Feed Type', widget.farmData['feedType'] ?? 'N/A'),
           _buildDetailRow('Growth Stage', widget.farmData['growthStage'] ?? 'N/A'),
         ],
@@ -696,9 +701,9 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.02),
+        color: AppColors.cardLight.withOpacity(0.5),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.white.withOpacity(0.04)),
+        border: Border.all(color: AppColors.border.withOpacity(0.5)),
       ),
       child: Row(
         children: [
@@ -715,9 +720,9 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 11, color: Color(0xFF94A3B8))),
+                Text(label, style: GoogleFonts.inter(fontWeight: FontWeight.w500, fontSize: 11, color: AppColors.textSecondary)),
                 const SizedBox(height: 2),
-                Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                Text(value, style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary)),
               ],
             ),
           ),
@@ -733,7 +738,7 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
           _buildDetailRow('Scheme Support', widget.farmData['scheme'] ?? 'N/A'),
           _buildDetailRow('Subsidy Info', widget.farmData['subsidyStatus'] ?? 'N/A'),
           _buildDetailRow('Insurance', widget.farmData['insuranceDetails'] ?? 'N/A'),
-          const Divider(height: 20, color: Colors.white10),
+          Divider(height: 20, color: AppColors.divider),
           _buildDetailRow('Est. Revenue', widget.farmData['revenueEst'] ?? 'N/A', isBold: true),
         ],
       ),
@@ -751,12 +756,12 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
 
     if (filtered.isEmpty) {
       return _buildCard(
-        child: const Center(
+        child: Center(
           child: Padding(
-            padding: EdgeInsets.symmetric(vertical: 12),
+            padding: const EdgeInsets.symmetric(vertical: 12),
             child: Text(
               'No documents found.',
-              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+              style: GoogleFonts.inter(color: AppColors.textSecondary, fontSize: 13),
             ),
           ),
         ),
@@ -774,28 +779,28 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.description_outlined, color: Color(0xFF06B6D4), size: 18),
+                    Icon(Icons.description_outlined, color: AppColors.primary, size: 18),
                     const SizedBox(width: 10),
                     Text(
                       e.key == 'Pollution Cert' ? 'Pollution Certificate' : e.key,
-                      style: const TextStyle(color: Colors.white70, fontSize: 13),
+                      style: GoogleFonts.inter(color: AppColors.textPrimary, fontSize: 13),
                     ),
                   ],
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: isVerified ? const Color(0xFF10B981).withOpacity(0.1) : Colors.amber.withOpacity(0.1),
+                    color: isVerified ? AppColors.success.withOpacity(0.1) : AppColors.warning.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(6),
                     border: Border.all(
-                      color: isVerified ? const Color(0xFF10B981).withOpacity(0.3) : Colors.amber.withOpacity(0.3),
+                      color: isVerified ? AppColors.success.withOpacity(0.3) : AppColors.warning.withOpacity(0.3),
                     ),
                   ),
                   child: Text(
                     e.value.toString().toUpperCase(), 
-                    style: TextStyle(
+                    style: GoogleFonts.inter(
                       fontSize: 9, 
-                      color: isVerified ? const Color(0xFF10B981) : Colors.amber, 
+                      color: isVerified ? AppColors.success : AppColors.warning, 
                       fontWeight: FontWeight.bold,
                       letterSpacing: 0.5,
                     ),
@@ -831,14 +836,14 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
             shape: BoxShape.circle,
             gradient: RadialGradient(
               colors: [
-                const Color(0xFF6366F1).withOpacity(0.03),
-                const Color(0xFF06B6D4).withOpacity(0.08),
+                AppColors.secondary.withOpacity(0.05),
+                AppColors.primary.withOpacity(0.12),
               ],
             ),
-            border: Border.all(color: const Color(0xFF06B6D4).withOpacity(0.25), width: 1.5),
+            border: Border.all(color: AppColors.border, width: 1.5),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF06B6D4).withOpacity(0.05),
+                color: AppColors.shadowBlue.withOpacity(0.05),
                 blurRadius: 10,
               ),
             ],
@@ -849,12 +854,12 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
             child: Text(
               value, 
               textAlign: TextAlign.center, 
-              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: Colors.white),
+              style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 13, color: AppColors.textPrimary),
             ),
           ),
         ),
         const SizedBox(height: 10),
-        Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+        Text(label, style: GoogleFonts.inter(fontSize: 11, color: AppColors.textSecondary)),
       ],
     );
   }
@@ -867,7 +872,7 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
           if (widget.isAuthority) ...[
             _buildStatusEditor(),
             const SizedBox(height: 16),
-            Container(height: 1, color: Colors.white.withOpacity(0.08)),
+            Container(height: 1, color: AppColors.divider),
             const SizedBox(height: 16),
           ],
           _buildDetailRow('Last Inspector', widget.farmData['inspector'] ?? 'N/A'),
@@ -877,13 +882,13 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
             width: double.infinity,
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFF0F172A),
+              color: AppColors.warningLight.withOpacity(0.3),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.amber.withOpacity(0.15)),
+              border: Border.all(color: AppColors.warning.withOpacity(0.3)),
             ),
             child: Text(
               'Remarks: ${widget.farmData['remarks'] ?? 'None'}', 
-              style: const TextStyle(fontStyle: FontStyle.italic, color: Colors.amberAccent, fontSize: 12, height: 1.4),
+              style: GoogleFonts.inter(fontStyle: FontStyle.italic, color: AppColors.warning, fontSize: 12, height: 1.4, fontWeight: FontWeight.w500),
             ),
           ),
         ],
@@ -897,24 +902,24 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
 
     return Row(
       children: [
-        const Text('Status Action:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13)),
+        Text('Status Action:', style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: AppColors.textPrimary, fontSize: 13)),
         const SizedBox(width: 14),
         Expanded(
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             decoration: BoxDecoration(
-              color: const Color(0xFF0F172A),
+              color: AppColors.cardLight,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.white.withOpacity(0.08)),
+              border: Border.all(color: AppColors.border),
             ),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
-                dropdownColor: const Color(0xFF0F172A),
+                dropdownColor: AppColors.surface,
                 value: current,
                 isExpanded: true,
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500, fontSize: 13),
-                icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF06B6D4)),
-                items: statuses.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                style: GoogleFonts.inter(color: AppColors.textPrimary, fontWeight: FontWeight.w500, fontSize: 13),
+                icon: Icon(Icons.arrow_drop_down, color: AppColors.primary),
+                items: statuses.map((s) => DropdownMenuItem(value: s, child: Text(s, style: GoogleFonts.inter(color: AppColors.textPrimary)))).toList(),
                 onChanged: (String? newValue) async {
                   if (newValue == null) return;
 
@@ -923,22 +928,22 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
                     final confirmed = await showDialog<bool>(
                       context: context,
                       builder: (context) => AlertDialog(
-                        backgroundColor: const Color(0xFF0F172A),
+                        backgroundColor: AppColors.surface,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        title: const Text('Confirm Inactivate', style: TextStyle(color: Colors.white)),
-                        content: const Text(
+                        title: Text('Confirm Inactivate', style: GoogleFonts.inter(color: AppColors.textPrimary, fontWeight: FontWeight.bold)),
+                        content: Text(
                           'Marking this farm Inactive will restrict access to its details for non-authority users. Continue?',
-                          style: TextStyle(color: Color(0xFF94A3B8)),
+                          style: GoogleFonts.inter(color: AppColors.textSecondary),
                         ),
                         actions: [
                           TextButton(
                             onPressed: () => Navigator.pop(context, false), 
-                            child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+                            child: Text('Cancel', style: GoogleFonts.inter(color: AppColors.textSecondary)),
                           ),
                           ElevatedButton(
                             onPressed: () => Navigator.pop(context, true), 
-                            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-                            child: const Text('Confirm', style: TextStyle(color: Colors.white)),
+                            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
+                            child: Text('Confirm', style: GoogleFonts.inter(color: Colors.white)),
                           ),
                         ],
                       ),
@@ -951,10 +956,12 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
                     widget.farmData['status'] = newValue;
                   });
 
+                  if (!mounted) return;
+
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text('Status updated to $newValue'),
-                      backgroundColor: Colors.indigoAccent,
+                      backgroundColor: AppColors.oceanDeep,
                     ),
                   );
                 },
@@ -973,12 +980,12 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
       padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(
         children: [
-          Icon(icon, size: 16, color: const Color(0xFF06B6D4)),
+          Icon(icon, size: 16, color: AppColors.primary),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               text, 
-              style: const TextStyle(color: Color(0xFFE2E8F0), fontSize: 13),
+              style: GoogleFonts.inter(color: AppColors.textPrimary, fontSize: 13),
             ),
           ),
         ],
@@ -992,12 +999,12 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+          Text(label, style: GoogleFonts.inter(color: AppColors.textSecondary, fontSize: 13)),
           Text(
             value, 
-            style: TextStyle(
+            style: GoogleFonts.inter(
               fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
-              color: isBold ? Colors.white : const Color(0xFFE2E8F0),
+              color: AppColors.textPrimary,
               fontSize: 13,
             ),
           ),
@@ -1012,11 +1019,11 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Text(label, style: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8), letterSpacing: 0.5)),
+          Text(label, style: GoogleFonts.inter(fontSize: 10, color: AppColors.textSecondary, letterSpacing: 0.5)),
           const SizedBox(height: 4),
           Text(
             value, 
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white),
+            style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.textPrimary),
           ),
         ],
       ),
@@ -1025,8 +1032,8 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
 
   Widget _buildStatusBadge(String status) {
     Color color = status == 'Active' 
-        ? const Color(0xFF10B981) // Emerald
-        : (status == 'Pending Approval' ? const Color(0xFFF59E0B) : const Color(0xFF64748B));
+        ? AppColors.success 
+        : (status == 'Pending Approval' ? AppColors.warning : AppColors.textSecondary);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
@@ -1036,7 +1043,7 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
       ),
       child: Text(
         status,
-        style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.5),
+        style: GoogleFonts.inter(color: color, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.5),
       ),
     );
   }

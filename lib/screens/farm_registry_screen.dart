@@ -6,6 +6,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:latlong2/latlong.dart';
 import '../widgets/location_picker_dialog.dart';
 import 'farm_details_screen.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import '../widgets/ocean_glass_card.dart';
+import '../widgets/animated_wave_header.dart';
+import '../theme/app_theme.dart';
 
 class FarmRegistryScreen extends StatefulWidget {
   final bool isAuthority;
@@ -731,7 +736,7 @@ class _FarmRegistryScreenState extends State<FarmRegistryScreen> {
       ),
       child: Text(
         status,
-        style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12),
+        style: GoogleFonts.inter(color: color, fontWeight: FontWeight.w700, fontSize: 11),
       ),
     );
   }
@@ -739,143 +744,197 @@ class _FarmRegistryScreenState extends State<FarmRegistryScreen> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: const Color(0xFFF8FAFC),
-      padding: const EdgeInsets.all(24),
+      color: Colors.transparent,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 24, bottom: 16, left: 24, right: 24),
+            child: Text(
+              'Farm Registry',
+              style: GoogleFonts.inter(
+                color: AppColors.textPrimary,
+                fontSize: 26,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -0.5,
+              ),
+            ).animate().fadeIn(duration: 400.ms).slideX(),
+          ),
 
-          // Search and Filter Options
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _searchController,
-                      decoration: const InputDecoration(
-                        hintText: 'Search by Name or Owner...',
-                        prefixIcon: Icon(Icons.search),
-                        filled: true,
-                        fillColor: Colors.white,
-                        border: OutlineInputBorder(
-                          borderSide: BorderSide.none,
-                          borderRadius: BorderRadius.all(Radius.circular(12)),
+                  // Search and Filter Options
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            boxShadow: [BoxShadow(color: AppColors.shadowBlue.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
+                          ),
+                          child: TextField(
+                            controller: _searchController,
+                            decoration: InputDecoration(
+                              hintText: 'Search by Name or Owner...',
+                              hintStyle: GoogleFonts.inter(color: AppColors.textMuted, fontSize: 14),
+                              prefixIcon: Icon(Icons.search_rounded, color: AppColors.primary),
+                              filled: true,
+                              fillColor: AppColors.surface.withOpacity(0.9),
+                              contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                              border: OutlineInputBorder(
+                                borderSide: BorderSide(color: AppColors.primary.withOpacity(0.1)),
+                                borderRadius: const BorderRadius.all(Radius.circular(16)),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderSide: BorderSide(color: AppColors.primary.withOpacity(0.1)),
+                                borderRadius: const BorderRadius.all(Radius.circular(16)),
+                              ),
+                            ),
+                          ),
                         ),
                       ),
+                      if (widget.isAuthority) ...[
+                        const SizedBox(width: 12),
+                        Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(colors: AppColors.oceanGradient),
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [BoxShadow(color: AppColors.primary.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))],
+                          ),
+                          child: ElevatedButton.icon(
+                            onPressed: _showAddFarmDialog,
+                            icon: const Icon(Icons.add_rounded, size: 20),
+                            label: Text('Add Farm', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.transparent,
+                              foregroundColor: Colors.white,
+                              shadowColor: Colors.transparent,
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ).animate().fadeIn(delay: 200.ms),
+                  const SizedBox(height: 16),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        _buildFilterChip('All'),
+                        const SizedBox(width: 8),
+                        _buildFilterChip('Active'),
+                        const SizedBox(width: 8),
+                        _buildFilterChip('Pending Mirror'),
+                        const SizedBox(width: 8),
+                        _buildFilterChip('Inactive'),
+                      ],
+                    ),
+                  ).animate().fadeIn(delay: 300.ms),
+                  const SizedBox(height: 20),
+                  // Farm List
+                  Expanded(
+                    child: StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance.collection('farms').snapshots(),
+                      builder: (context, snapshot) {
+                        // Combine Mock Data + Firestore Data
+                        List<Map<String, dynamic>> combinedFarms = List.from(_allFarms);
+
+                        if (snapshot.hasData) {
+                          for (var doc in snapshot.data!.docs) {
+                            final data = doc.data() as Map<String, dynamic>;
+                            
+                            // Filter out farms with missing or invalid names
+                            if (data['name'] == null || data['name'].toString().trim().isEmpty || data['name'] == 'Unknown Farm') {
+                              continue;
+                            }
+                            
+                            // Avoid duplicates if IDs match
+                            if (!combinedFarms.any((f) => f['id'] == data['id'])) {
+                              combinedFarms.insert(0, data);
+                            }
+                          }
+                        }
+
+                        // Filter
+                        final query = _searchController.text.toLowerCase();
+                        final filteredFarms = combinedFarms.where((farm) {
+                          final matchesQuery = (farm['name'] ?? '').toLowerCase().contains(query) ||
+                              (farm['owner'] ?? '').toLowerCase().contains(query);
+                          final matchesFilter = _selectedFilter == 'All' || farm['status'] == _selectedFilter;
+                          return matchesQuery && matchesFilter;
+                        }).toList();
+
+                        if (filteredFarms.isEmpty) {
+                          return Center(
+                            child: Text('No farms found', style: GoogleFonts.inter(color: AppColors.textMuted)),
+                          );
+                        }
+
+                        return ListView.separated(
+                          padding: const EdgeInsets.only(bottom: 150),
+                          itemCount: filteredFarms.length,
+                          separatorBuilder: (context, index) => const SizedBox(height: 12),
+                          itemBuilder: (context, index) {
+                            final farm = filteredFarms[index];
+                            
+                            String displayedLocation = 'Unknown';
+                            if (farm['village'] != null && farm['taluka'] != null) {
+                              displayedLocation = '${farm['village']}, ${farm['taluka']}';
+                            } else if (farm['address'] != null && farm['address'].toString().trim().isNotEmpty) {
+                              displayedLocation = farm['address'];
+                            } else if (farm['district'] != null) {
+                              displayedLocation = farm['district'];
+                            }
+
+                            return OceanGlassCard(
+                              onTap: () => _showFarmDetails(farm),
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.secondary.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Icon(Icons.waves_rounded, color: AppColors.secondary),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(farm['name'] ?? 'Unknown Farm', 
+                                          style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 15, color: AppColors.textPrimary)),
+                                        const SizedBox(height: 4),
+                                        Text('${farm['owner'] ?? 'Unknown'} • $displayedLocation',
+                                          style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary)),
+                                      ],
+                                    ),
+                                  ),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      _buildStatusBadge(farm['status'] ?? 'Draft'),
+                                      const SizedBox(height: 6),
+                                      Icon(Icons.chevron_right_rounded, color: AppColors.textMuted, size: 20),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ).animate().fadeIn(delay: Duration(milliseconds: 50 * index)).slideY(begin: 0.1);
+                          },
+                        );
+                      },
                     ),
                   ),
-                  if (widget.isAuthority) ...[
-                    const SizedBox(width: 12),
-                    ElevatedButton.icon(
-                      onPressed: _showAddFarmDialog,
-                      icon: const Icon(Icons.add),
-                      label: const Text('Add Farm'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                      ),
-                    ),
-                  ],
                 ],
               ),
-              const SizedBox(height: 16),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    _buildFilterChip('All'),
-                    const SizedBox(width: 8),
-                    _buildFilterChip('Active'),
-                    const SizedBox(width: 8),
-                    _buildFilterChip('Pending Mirror'),
-                    const SizedBox(width: 8),
-                    _buildFilterChip('Inactive'),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          // Farm List
-          Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance.collection('farms').snapshots(),
-              builder: (context, snapshot) {
-                // Combine Mock Data + Firestore Data
-                List<Map<String, dynamic>> combinedFarms = List.from(_allFarms);
-
-                if (snapshot.hasData) {
-                  for (var doc in snapshot.data!.docs) {
-                    final data = doc.data() as Map<String, dynamic>;
-                    
-                    // Filter out farms with missing or invalid names
-                    if (data['name'] == null || data['name'].toString().trim().isEmpty || data['name'] == 'Unknown Farm') {
-                      continue;
-                    }
-                    
-                    // Avoid duplicates if IDs match
-                    if (!combinedFarms.any((f) => f['id'] == data['id'])) {
-                      combinedFarms.insert(0, data);
-                    }
-                  }
-                }
-
-                // Filter
-                final query = _searchController.text.toLowerCase();
-                final filteredFarms = combinedFarms.where((farm) {
-                  final matchesQuery = (farm['name'] ?? '').toLowerCase().contains(query) ||
-                      (farm['owner'] ?? '').toLowerCase().contains(query);
-                  final matchesFilter = _selectedFilter == 'All' || farm['status'] == _selectedFilter;
-                  return matchesQuery && matchesFilter;
-                }).toList();
-
-                if (filteredFarms.isEmpty) {
-                  return const Center(child: Text('No farms found'));
-                }
-
-                return ListView.separated(
-                  itemCount: filteredFarms.length,
-                  separatorBuilder: (context, index) => const Divider(),
-                  itemBuilder: (context, index) {
-                    final farm = filteredFarms[index];
-                    
-                    String displayedLocation = 'Unknown';
-                    if (farm['village'] != null && farm['taluka'] != null) {
-                      displayedLocation = '${farm['village']}, ${farm['taluka']}';
-                    } else if (farm['address'] != null && farm['address'].toString().trim().isNotEmpty) {
-                      displayedLocation = farm['address'];
-                    } else if (farm['district'] != null) {
-                      displayedLocation = farm['district'];
-                    }
-
-                    return Card(
-                      elevation: 0,
-                      margin: EdgeInsets.zero,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        onTap: () => _showFarmDetails(farm),
-                        title: Text(farm['name'] ?? 'Unknown Farm', style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Padding(
-                          padding: const EdgeInsets.only(top: 4.0),
-                          child: Text('${farm['owner'] ?? 'Unknown'} • $displayedLocation'),
-                        ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _buildStatusBadge(farm['status'] ?? 'Draft'),
-                            const SizedBox(width: 8),
-                            const Icon(Icons.chevron_right, color: Colors.grey),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                );
-              },
             ),
           ),
         ],
@@ -897,11 +956,17 @@ class _FarmRegistryScreenState extends State<FarmRegistryScreen> {
           _onFilterChanged(valueToCheck);
         }
       },
-      backgroundColor: Colors.white,
-      selectedColor: Colors.blue.shade100,
-      labelStyle: TextStyle(
-        color: isSelected ? Colors.blue.shade900 : Colors.black87,
-        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+      backgroundColor: AppColors.surface,
+      selectedColor: AppColors.primary.withOpacity(0.15),
+      checkmarkColor: AppColors.primary,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: isSelected ? AppColors.primary : AppColors.border),
+      ),
+      labelStyle: GoogleFonts.inter(
+        color: isSelected ? AppColors.primary : AppColors.textSecondary,
+        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+        fontSize: 13,
       ),
     );
   }
