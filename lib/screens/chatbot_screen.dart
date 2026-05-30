@@ -6,6 +6,8 @@ import '../services/chatbot_service.dart';
 import '../services/chat_storage_service.dart';
 import '../widgets/custom_back_button.dart';
 import '../widgets/glass_card.dart';
+import '../widgets/swimming_fish_background.dart';
+import '../theme/app_theme.dart';
 
 class ChatbotScreen extends StatefulWidget {
   final bool isAuthority;
@@ -115,9 +117,9 @@ class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProvider
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF090D16), // Premium dark mode background
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0F172A),
+        backgroundColor: AppColors.surface,
         elevation: 0,
         leadingWidth: 68,
         leading: CustomBackButton(onPressed: () => Navigator.pop(context)),
@@ -155,18 +157,18 @@ class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProvider
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'AquaGIS Copilot',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                    color: AppColors.textPrimary,
                     fontSize: 16,
                   ),
                 ),
                 Text(
                   _isTyping ? 'AI is processing...' : 'Online AI Assistant',
                   style: TextStyle(
-                    color: _isTyping ? const Color(0xFF06B6D4) : const Color(0xFF94A3B8),
+                    color: _isTyping ? const Color(0xFF06B6D4) : AppColors.textSecondary,
                     fontSize: 11,
                     fontWeight: FontWeight.w500,
                   ),
@@ -178,84 +180,86 @@ class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProvider
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1.0),
           child: Container(
-            color: Colors.white.withOpacity(0.08),
+            color: AppColors.border.withOpacity(0.5),
             height: 1.0,
           ),
         ),
       ),
-      body: Column(
-        children: [
-          // Dynamic Message Feed
-          Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: _chatStorageService.getChatHistory(_userId),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                   return const Center(child: CircularProgressIndicator(color: Color(0xFF06B6D4)));
-                }
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return Center(
-                    child: SingleChildScrollView(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.chat_bubble_outline,
-                            color: Colors.white.withOpacity(0.12),
-                            size: 64,
-                          ),
-                          const SizedBox(height: 16),
-                          const Text(
-                            'Begin your session with AquaGIS Copilot',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
+      body: SwimmingFishBackground(
+        child: Column(
+          children: [
+            // Dynamic Message Feed
+            Expanded(
+              child: StreamBuilder<QuerySnapshot>(
+                stream: _chatStorageService.getChatHistory(_userId),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                     return Center(child: CircularProgressIndicator(color: AppColors.secondary));
+                  }
+                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                    return Center(
+                      child: SingleChildScrollView(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.chat_bubble_outline,
+                              color: AppColors.textSecondary.withOpacity(0.2),
+                              size: 64,
                             ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Ask about species suitability, salinity metrics,\nsubsidies, or biosecurity recommendations.',
-                            style: TextStyle(
-                              color: const Color(0xFF94A3B8),
-                              fontSize: 13,
+                            const SizedBox(height: 16),
+                            Text(
+                              'Begin your session with AquaGIS Copilot',
+                              style: TextStyle(
+                                color: AppColors.textPrimary.withOpacity(0.8),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
                             ),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 32),
-                          _buildInitialQuickReplies(),
-                        ],
+                            const SizedBox(height: 8),
+                            Text(
+                              'Ask about species suitability, salinity metrics,\nsubsidies, or biosecurity recommendations.',
+                              style: TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 13,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 32),
+                            _buildInitialQuickReplies(),
+                          ],
+                        ),
                       ),
-                    ),
+                    );
+                  }
+  
+                  final messages = snapshot.data!.docs;
+  
+                  return ListView.builder(
+                    controller: _scrollController,
+                    reverse: true,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                    itemCount: messages.length,
+                    itemBuilder: (context, index) {
+                      final data = messages[index].data() as Map<String, dynamic>;
+                      final isUser = data['role'] == 'user';
+                      return _buildMessageBubble(data['content'], isUser);
+                    },
                   );
-                }
-
-                final messages = snapshot.data!.docs;
-
-                return ListView.builder(
-                  controller: _scrollController,
-                  reverse: true,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                  itemCount: messages.length,
-                  itemBuilder: (context, index) {
-                    final data = messages[index].data() as Map<String, dynamic>;
-                    final isUser = data['role'] == 'user';
-                    return _buildMessageBubble(data['content'], isUser);
-                  },
-                );
-              },
+                },
+              ),
             ),
-          ),
-          
-          // Typing Indicator
-          if (_isTyping) _buildTypingIndicator(),
-
-          // Inline Quick Action Chips
-          _buildQuickActionChips(),
             
-          // Input panel
-          _buildMessageInput(),
-        ],
+            // Typing Indicator
+            if (_isTyping) _buildTypingIndicator(),
+  
+            // Inline Quick Action Chips
+            _buildQuickActionChips(),
+              
+            // Input panel
+            _buildMessageInput(),
+          ],
+        ),
       ),
     );
   }
@@ -274,18 +278,18 @@ class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProvider
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: BoxDecoration(
-                color: const Color(0xFF1E293B).withOpacity(0.4),
+                color: AppColors.cardLight,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.white.withOpacity(0.08)),
+                border: Border.all(color: AppColors.border),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.rocket_launch, color: Color(0xFF06B6D4), size: 14),
+                  Icon(Icons.rocket_launch, color: AppColors.secondary, size: 14),
                   const SizedBox(width: 8),
                   Text(
                     reply,
-                    style: const TextStyle(color: Colors.white70, fontSize: 13),
+                    style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
                   ),
                 ],
               ),
@@ -297,6 +301,18 @@ class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProvider
   }
 
   Widget _buildMessageBubble(String content, bool isUser) {
+    final isDark = AppColors.isDark;
+    
+    final bubbleBg = isUser
+        ? (isDark ? const Color(0xFF6366F1).withOpacity(0.15) : AppColors.primary.withOpacity(0.12))
+        : (isDark ? const Color(0xFF1E293B).withOpacity(0.45) : AppColors.cardLight.withOpacity(0.85));
+        
+    final bubbleBorder = isUser
+        ? (isDark ? const Color(0xFF6366F1).withOpacity(0.3) : AppColors.primary.withOpacity(0.35))
+        : (isDark ? const Color(0xFF06B6D4).withOpacity(0.2) : AppColors.border);
+        
+    final bubbleTextColor = isDark ? Colors.white : AppColors.textPrimary;
+
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Column(
@@ -307,13 +323,13 @@ class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProvider
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               if (!isUser) ...[
-                const Icon(Icons.smart_toy, color: Color(0xFF06B6D4), size: 16),
+                Icon(Icons.smart_toy, color: AppColors.secondary, size: 16),
                 const SizedBox(width: 6),
               ],
               Text(
                 isUser ? 'You' : 'AquaGIS Copilot',
-                style: const TextStyle(
-                  color: Color(0xFF64748B),
+                style: TextStyle(
+                  color: AppColors.textSecondary,
                   fontSize: 10,
                   fontWeight: FontWeight.bold,
                 ),
@@ -324,12 +340,8 @@ class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProvider
           GlassCard(
             borderRadius: 16.0,
             blur: 10.0,
-            backgroundColor: isUser
-                ? const Color(0xFF6366F1).withOpacity(0.15) // Indigo translucent
-                : const Color(0xFF1E293B).withOpacity(0.45), // Slate translucent
-            borderColor: isUser
-                ? const Color(0xFF6366F1).withOpacity(0.3)
-                : const Color(0xFF06B6D4).withOpacity(0.2),
+            backgroundColor: bubbleBg,
+            borderColor: bubbleBorder,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             margin: const EdgeInsets.only(bottom: 16),
             child: Container(
@@ -338,8 +350,8 @@ class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProvider
               ),
               child: Text(
                 content,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: bubbleTextColor,
                   fontSize: 14,
                   height: 1.45,
                 ),
@@ -352,6 +364,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProvider
   }
 
   Widget _buildTypingIndicator() {
+    final isDark = AppColors.isDark;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       child: Align(
@@ -359,21 +372,21 @@ class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProvider
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.auto_awesome, color: Color(0xFF06B6D4), size: 14),
+            Icon(Icons.auto_awesome, color: AppColors.secondary, size: 14),
             const SizedBox(width: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
-                color: const Color(0xFF1E293B).withOpacity(0.4),
+                color: isDark ? const Color(0xFF1E293B).withOpacity(0.4) : AppColors.cardLight.withOpacity(0.85),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFF06B6D4).withOpacity(0.15)),
+                border: Border.all(color: isDark ? const Color(0xFF06B6D4).withOpacity(0.15) : AppColors.border),
               ),
               child: Row(
                 children: [
-                  const Text(
+                  Text(
                     'Copilot is writing',
                     style: TextStyle(
-                      color: Color(0xFF94A3B8),
+                      color: AppColors.textSecondary,
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
                     ),
@@ -399,11 +412,11 @@ class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProvider
           return Padding(
             padding: const EdgeInsets.only(right: 8),
             child: ActionChip(
-              backgroundColor: const Color(0xFF0F172A),
-              side: BorderSide(color: Colors.indigoAccent.withOpacity(0.2)),
+              backgroundColor: AppColors.surface,
+              side: BorderSide(color: AppColors.border),
               label: Text(
                 reply,
-                style: const TextStyle(color: Colors.white70, fontSize: 12),
+                style: TextStyle(color: AppColors.textPrimary, fontSize: 12),
               ),
               onPressed: () => _sendMessage(reply),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
@@ -416,7 +429,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProvider
 
   Widget _buildMessageInput() {
     return Container(
-      color: const Color(0xFF0F172A),
+      color: AppColors.surface,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: SafeArea(
         child: Row(
@@ -424,23 +437,23 @@ class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProvider
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
-                  color: const Color(0xFF090D16),
+                  color: AppColors.bg,
                   borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: Colors.white.withOpacity(0.08)),
+                  border: Border.all(color: AppColors.border),
                 ),
                 child: TextField(
                   controller: _messageController,
                   textCapitalization: TextCapitalization.sentences,
                   minLines: 1,
                   maxLines: 4,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration(
+                  style: TextStyle(color: AppColors.textPrimary),
+                  decoration: InputDecoration(
                     hintText: 'Message AquaGIS Copilot...',
-                    hintStyle: TextStyle(color: Color(0xFF64748B)),
+                    hintStyle: TextStyle(color: AppColors.textMuted),
                     border: InputBorder.none,
                     enabledBorder: InputBorder.none,
                     focusedBorder: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                   ),
                 ),
               ),
@@ -450,10 +463,10 @@ class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProvider
               onTap: () => _sendMessage(),
               child: Container(
                 padding: const EdgeInsets.all(12),
-                decoration: const BoxDecoration(
-                  color: Colors.indigoAccent,
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
                   shape: BoxShape.circle,
-                  boxShadow: [
+                  boxShadow: const [
                     BoxShadow(
                       color: Colors.black26,
                       blurRadius: 4,
@@ -512,8 +525,8 @@ class _AnimatedDotsState extends State<_AnimatedDots> with SingleTickerProviderS
               transform: Matrix4.translationValues(0, bounce, 0),
               width: 5,
               height: 5,
-              decoration: const BoxDecoration(
-                color: Color(0xFF06B6D4),
+              decoration: BoxDecoration(
+                color: AppColors.secondary,
                 shape: BoxShape.circle,
               ),
             );
