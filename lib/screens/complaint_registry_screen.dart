@@ -1,10 +1,12 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:uuid/uuid.dart';
 import 'dart:convert';
 import '../widgets/custom_back_button.dart';
@@ -39,8 +41,7 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
   
   Map<String, dynamic>? _selectedLocationData;
   bool _isSearchingLocation = false;
-  File? _imageFile;
-  Uint8List? _webImage;
+  Uint8List? _imageBytes;
   bool _hasImage = false;
   bool _isSubmitting = false;
   bool _isSuccess = false;
@@ -185,31 +186,68 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
 
   void _deleteImage() {
     setState(() {
-      _imageFile = null;
-      _webImage = null;
+      _imageBytes = null;
       _hasImage = false;
     });
   }
 
-  Future<void> _pickImage() async {
+  Future<Uint8List> _fallbackCompress(Uint8List bytes) async {
+    try {
+      final ui.Codec metadataCodec = await ui.instantiateImageCodec(bytes);
+      final ui.FrameInfo metadataFrame = await metadataCodec.getNextFrame();
+      final int originalWidth = metadataFrame.image.width;
+      final int originalHeight = metadataFrame.image.height;
+      metadataFrame.image.dispose();
+      
+      const int maxDim = 250;
+      int? targetWidth;
+      int? targetHeight;
+      if (originalWidth > originalHeight) {
+        if (originalWidth > maxDim) {
+          targetWidth = maxDim;
+        }
+      } else {
+        if (originalHeight > maxDim) {
+          targetHeight = maxDim;
+        }
+      }
+      
+      final ui.Codec resizeCodec = await ui.instantiateImageCodec(
+        bytes,
+        targetWidth: targetWidth,
+        targetHeight: targetHeight,
+      );
+      final ui.FrameInfo resizeFrame = await resizeCodec.getNextFrame();
+      final ui.Image resizedImage = resizeFrame.image;
+      
+      final ByteData? byteData = await resizedImage.toByteData(format: ui.ImageByteFormat.png);
+      Uint8List result = bytes;
+      if (byteData != null) {
+        result = byteData.buffer.asUint8List();
+      }
+      resizedImage.dispose();
+      return result;
+    } catch (e) {
+      print("Fallback compression error: $e");
+    }
+    return bytes;
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
     try {
       final pickedFile = await ImagePicker().pickImage(
-        source: ImageSource.gallery,
+        source: source,
+        maxWidth: 800,
+        maxHeight: 800,
+        imageQuality: 30, // Compress to ensure Base64 string is well under the 1MB Firestore limit
       );
 
       if (pickedFile != null) {
-        if (kIsWeb) {
-          final bytes = await pickedFile.readAsBytes();
-          setState(() {
-            _webImage = bytes;
-            _hasImage = true;
-          });
-        } else {
-          setState(() {
-            _imageFile = File(pickedFile.path);
-            _hasImage = true;
-          });
-        }
+        final bytes = await pickedFile.readAsBytes();
+        setState(() {
+          _imageBytes = bytes;
+          _hasImage = true;
+        });
       }
     } catch (e) {
       print("Error picking image: $e");
@@ -219,6 +257,51 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
         );
       }
     }
+  }
+
+  void _showImageSourceDialog() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Select Image Source',
+                style: GoogleFonts.inter(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: Icon(Icons.camera_alt_rounded, color: AppColors.primary),
+                title: Text('Take a Photo', style: GoogleFonts.inter(color: AppColors.textPrimary)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickImage(ImageSource.camera);
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.photo_library_rounded, color: AppColors.primary),
+                title: Text('Choose from Gallery', style: GoogleFonts.inter(color: AppColors.textPrimary)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickImage(ImageSource.gallery);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<Iterable<Map<String, dynamic>>> _searchLocations(String query) async {
@@ -303,38 +386,61 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
       final String complaintId = const Uuid().v4().substring(0, 8).toUpperCase();
       String? imageUrl;
 
-      // 1. Convert Image to Base64 (Bypass Storage)
-      print("Converting image to Base64...");
-      try {
-        if (kIsWeb && _webImage != null) {
-          final base64String = base64Encode(_webImage!);
-          imageUrl = 'data:image/jpeg;base64,$base64String';
-        } else if (!kIsWeb && _imageFile != null) {
-          final bytes = await _imageFile!.readAsBytes();
-          final base64String = base64Encode(bytes);
-          imageUrl = 'data:image/jpeg;base64,$base64String';
+      // 1. Upload Image to Firebase Storage
+      if (_imageBytes != null) {
+        print("Uploading image to Firebase Storage...");
+        try {
+          final ref = FirebaseStorage.instance.ref().child('complaints/$complaintId/image.jpg');
+          final uploadTask = ref.putData(_imageBytes!, SettableMetadata(contentType: 'image/jpeg'));
+          final snapshot = await uploadTask.timeout(const Duration(seconds: 4));
+          imageUrl = await snapshot.ref.getDownloadURL().timeout(const Duration(seconds: 4));
+          print("Uploaded image successfully: $imageUrl");
+        } catch (storageError) {
+          print("Storage upload failed or timed out: $storageError. Falling back to Base64...");
+          try {
+            final compressedBytes = await _fallbackCompress(_imageBytes!);
+            final base64String = base64Encode(compressedBytes);
+            imageUrl = 'data:image/jpeg;base64,$base64String';
+          } catch (e) {
+            print("Fallback base64 conversion failed: $e");
+          }
         }
-      } catch (uploadError) {
-        print("Image conversion failed: $uploadError. Continuing without image.");
       }
-      print("Image URL: $imageUrl");
 
-      // 1b. Convert Audio to Base64 (Bypass Storage)
+      // 1b. Upload Audio to Firebase Storage
       String? audioUrl;
-      try {
-        if (_audioPath != null && _audioPath!.isNotEmpty) {
-          List<int> bytes;
+      if (_audioPath != null && _audioPath!.isNotEmpty) {
+        print("Uploading audio to Firebase Storage...");
+        try {
+          final ref = FirebaseStorage.instance.ref().child('complaints/$complaintId/audio.m4a');
           if (kIsWeb) {
              final response = await http.get(Uri.parse(_audioPath!));
-             bytes = response.bodyBytes;
+             final bytes = response.bodyBytes;
+             final uploadTask = ref.putData(bytes, SettableMetadata(contentType: 'audio/mp4'));
+             final snapshot = await uploadTask.timeout(const Duration(seconds: 4));
+             audioUrl = await snapshot.ref.getDownloadURL().timeout(const Duration(seconds: 4));
           } else {
-             bytes = await File(_audioPath!).readAsBytes();
+             final uploadTask = ref.putFile(File(_audioPath!), SettableMetadata(contentType: 'audio/mp4'));
+             final snapshot = await uploadTask.timeout(const Duration(seconds: 4));
+             audioUrl = await snapshot.ref.getDownloadURL().timeout(const Duration(seconds: 4));
           }
-          final base64String = base64Encode(bytes);
-          audioUrl = 'data:audio/mp4;base64,$base64String';
+          print("Uploaded audio successfully: $audioUrl");
+        } catch (e) {
+          print("Audio Storage upload failed or timed out: $e. Falling back to Base64...");
+          try {
+            List<int> bytes;
+            if (kIsWeb) {
+               final response = await http.get(Uri.parse(_audioPath!));
+               bytes = response.bodyBytes;
+            } else {
+               bytes = await File(_audioPath!).readAsBytes();
+            }
+            final base64String = base64Encode(bytes);
+            audioUrl = 'data:audio/mp4;base64,$base64String';
+          } catch (audioErr) {
+            print("Audio fallback failed: $audioErr");
+          }
         }
-      } catch (e) {
-        print("Audio conversion failed: $e. Continuing without audio.");
       }
 
       // 2. Add AI Analysis
@@ -344,7 +450,7 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
         'vesselType': _selectedVesselType,
         'description': _descriptionController.text,
         'location': 'Lat: ${_selectedLocationData!['lat']}, Lng: ${_selectedLocationData!['lng']} (${_selectedLocationData!['name']})',
-      });
+      }).timeout(const Duration(seconds: 5), onTimeout: () => null);
 
       // 3. Save data to Firestore
       print("Saving to Firestore...");
@@ -393,7 +499,9 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
   Widget build(BuildContext context) {
     return DefaultTabController(
       length: 2,
-      child: Scaffold(
+      child: Builder(
+        builder: (context) {
+          return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(130),
@@ -405,23 +513,7 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
               AppBar(
                 backgroundColor: Colors.transparent,
                 elevation: 0,
-                leading: CustomBackButton(onPressed: () {
-                  if (_isSuccess) {
-                    setState(() {
-                      _isSuccess = false;
-                      _isAnonymous = false;
-                      _selectedVesselType = null;
-                      _selectedActivityType = null;
-                      _descriptionController.clear();
-                      _phoneController.clear();
-                      _imageFile = null;
-                      _webImage = null;
-                      _hasImage = false;
-                    });
-                  } else {
-                    Navigator.pop(context);
-                  }
-                }),
+                automaticallyImplyLeading: false,
                 title: Text(
                   'Report Incident',
                   style: GoogleFonts.inter(color: AppColors.textPrimary, fontWeight: FontWeight.w900, fontSize: 22),
@@ -445,7 +537,7 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
         children: [
           // Tab 1: New Report Form
           _isSuccess 
-            ? _buildSuccessScreen()
+            ? _buildSuccessScreen(context)
             : (_isSubmitting 
               ? Center(child: CircularProgressIndicator(color: AppColors.primary))
               : SingleChildScrollView(
@@ -479,10 +571,14 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
                             child: TextFormField(
                               controller: _phoneController,
                               keyboardType: TextInputType.phone,
+                              style: GoogleFonts.inter(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 16),
                               decoration: InputDecoration(
                                 labelText: 'Contact Number',
+                                labelStyle: GoogleFonts.inter(color: AppColors.textSecondary, fontWeight: FontWeight.w700),
                                 hintText: 'e.g., 9876543210',
+                                hintStyle: GoogleFonts.inter(color: AppColors.textMuted),
                                 border: InputBorder.none,
+                                filled: false,
                                 prefixIcon: Icon(Icons.phone_rounded, color: AppColors.primary),
                               ),
                               validator: (value) {
@@ -503,9 +599,12 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
                             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
                             child: DropdownButtonFormField<String>(
                               isExpanded: true,
+                              style: GoogleFonts.inter(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 16),
                               decoration: InputDecoration(
                                  labelText: 'Vessel Type',
+                                 labelStyle: GoogleFonts.inter(color: AppColors.textSecondary, fontWeight: FontWeight.w700),
                                  border: InputBorder.none,
+                                 filled: false,
                                  prefixIcon: Icon(Icons.directions_boat_rounded, color: AppColors.primary)
                               ),
                               value: _selectedVesselType,
@@ -528,9 +627,12 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
                             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
                             child: DropdownButtonFormField<String>(
                               isExpanded: true,
+                              style: GoogleFonts.inter(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 16),
                               decoration: InputDecoration(
                                  labelText: 'Type of Suspicious Activity',
+                                 labelStyle: GoogleFonts.inter(color: AppColors.textSecondary, fontWeight: FontWeight.w700),
                                  border: InputBorder.none,
+                                 filled: false,
                                  prefixIcon: Icon(Icons.warning_amber_rounded, color: AppColors.warning)
                               ),
                               value: _selectedActivityType,
@@ -554,10 +656,13 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
                             child: TextFormField(
                               controller: _descriptionController,
                               maxLines: 4,
+                              style: GoogleFonts.inter(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 16),
                               decoration: InputDecoration(
                                 labelText: 'Additional Details / Description',
+                                labelStyle: GoogleFonts.inter(color: AppColors.textSecondary, fontWeight: FontWeight.w700),
                                 alignLabelWithHint: true,
                                 border: InputBorder.none,
+                                filled: false,
                                 suffixIcon: IconButton(
                                   icon: Icon(
                                     _isListening ? Icons.mic : Icons.mic_none_rounded,
@@ -581,40 +686,36 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
                         const SizedBox(height: 12),
                         
                         // Image Picker
-                        InkWell(
-                          onTap: _pickImage,
-                          child: OceanGlassCard(
-                            padding: EdgeInsets.zero,
-                            child: SizedBox(
-                              height: 100,
-                              width: double.infinity,
-                              child: _hasImage
-                                  ? Stack(
-                                      children: [
-                                        ClipRRect(
-                                          borderRadius: BorderRadius.circular(16),
-                                          child: kIsWeb
-                                              ? Image.memory(_webImage!, fit: BoxFit.cover, width: double.infinity)
-                                              : Image.file(_imageFile!, fit: BoxFit.cover, width: double.infinity),
+                        OceanGlassCard(
+                          onTap: _showImageSourceDialog,
+                          padding: EdgeInsets.zero,
+                          child: SizedBox(
+                            height: 100,
+                            width: double.infinity,
+                            child: _hasImage && _imageBytes != null
+                                ? Stack(
+                                    children: [
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(16),
+                                        child: Image.memory(_imageBytes!, fit: BoxFit.cover, width: double.infinity),
+                                      ),
+                                      Positioned(
+                                        right: 8, top: 8,
+                                        child: IconButton(
+                                          icon: const Icon(Icons.close_rounded, color: Colors.white, shadows: [Shadow(color: Colors.black, blurRadius: 4)]),
+                                          onPressed: _deleteImage,
                                         ),
-                                        Positioned(
-                                          right: 8, top: 8,
-                                          child: IconButton(
-                                            icon: const Icon(Icons.close_rounded, color: Colors.white, shadows: [Shadow(color: Colors.black, blurRadius: 4)]),
-                                            onPressed: _deleteImage,
-                                          ),
-                                        )
-                                      ],
-                                    )
-                                  : Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(Icons.camera_alt_rounded, size: 48, color: AppColors.primary.withOpacity(0.5)),
-                                        const SizedBox(height: 8),
-                                        Text('Tap to take a photo of the vessel', style: GoogleFonts.inter(color: AppColors.textSecondary, fontWeight: FontWeight.w600))
-                                      ],
-                                    ),
-                            ),
+                                      )
+                                    ],
+                                  )
+                                : Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.camera_alt_rounded, size: 48, color: AppColors.primary.withOpacity(0.5)),
+                                      const SizedBox(height: 8),
+                                      Text('Tap to take a photo of the vessel', style: GoogleFonts.inter(color: AppColors.textSecondary, fontWeight: FontWeight.w600))
+                                    ],
+                                  ),
                           ),
                         ).animate().fadeIn(delay: 450.ms).slideY(begin: 0.1),
       
@@ -678,9 +779,12 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
                                   controller: controller,
                                   focusNode: focusNode,
                                   onEditingComplete: onEditingComplete,
+                                  style: GoogleFonts.inter(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 16),
                                   decoration: InputDecoration(
                                     labelText: 'Search Location (Village / Landmark)',
+                                    labelStyle: GoogleFonts.inter(color: AppColors.textSecondary, fontWeight: FontWeight.w700),
                                     border: InputBorder.none,
+                                    filled: false,
                                     prefixIcon: Icon(Icons.search_rounded, color: AppColors.primary),
                                     suffixIcon: _isSearchingLocation
                                         ? Padding(
@@ -734,9 +838,11 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
           _buildMyReports(),
         ],
       ),
-    ),
-  );
-}
+    );
+        },
+      ),
+    );
+  }
 
   Widget _buildMyReports() {
     return StreamBuilder<QuerySnapshot>(
@@ -825,7 +931,49 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
               "Submitted on: ${date.day}/${date.month}/${date.year}",
               style: GoogleFonts.inter(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w500),
             ),
-          Divider(height: 24, color: AppColors.border),
+          const SizedBox(height: 12),
+          if (data['description'] != null && data['description'].toString().isNotEmpty) ...[
+            Text(
+              data['description'],
+              style: GoogleFonts.inter(fontSize: 14, color: AppColors.textPrimary, height: 1.4),
+            ),
+            const SizedBox(height: 12),
+          ],
+          if (data['imageUrl'] != null && data['imageUrl'].toString().isNotEmpty) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: data['imageUrl'].toString().startsWith('data:image')
+                  ? Image.memory(
+                      base64Decode(data['imageUrl'].toString().split(',').last),
+                      width: double.infinity,
+                      height: 150,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => Container(
+                        height: 150,
+                        color: AppColors.primary.withOpacity(0.05),
+                        child: Center(child: Icon(Icons.broken_image, size: 40, color: AppColors.textMuted)),
+                      ),
+                    )
+                  : Image.network(
+                      data['imageUrl'],
+                      width: double.infinity,
+                      height: 150,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => Container(
+                        height: 150,
+                        color: AppColors.primary.withOpacity(0.05),
+                        child: Center(child: Icon(Icons.broken_image, size: 40, color: AppColors.textMuted)),
+                      ),
+                    ),
+            ),
+            const SizedBox(height: 12),
+          ],
+          if (data['audioUrl'] != null && data['audioUrl'].toString().isNotEmpty) ...[
+            _AudioPlayerWidget(audioData: data['audioUrl']),
+            const SizedBox(height: 12),
+          ],
+          Divider(height: 16, color: AppColors.border),
+          const SizedBox(height: 8),
           if (data['acknowledgementMessage'] != null) ...[
             Text(
               "Message from Authority:",
@@ -897,56 +1045,257 @@ class _ComplaintRegistryScreenState extends State<ComplaintRegistryScreen> {
     ).animate().fadeIn(duration: 400.ms);
   }
 
-  Widget _buildSuccessScreen() {
+  Widget _buildSuccessScreen(BuildContext context) {
     return Center(
       child: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.only(left: 32.0, right: 32.0, top: 32.0, bottom: 150.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+        padding: const EdgeInsets.only(left: 24.0, right: 24.0, top: 12.0, bottom: 100.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.check_circle, color: Colors.green, size: 80),
-            const SizedBox(height: 12),
-            const Text(
-              'Thank you for reporting.',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Your complaint has been recorded and will be reviewed by the authorities. You can track progress in the "My Reports" tab.',
-              style: TextStyle(fontSize: 16, color: Colors.grey.shade700, height: 1.5),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
+            // Animated glowing checkmark
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade300)
+                shape: BoxShape.circle,
+                color: AppColors.success.withOpacity(0.1),
+                border: Border.all(color: AppColors.success.withOpacity(0.2), width: 2),
               ),
+              child: Icon(Icons.check_circle_rounded, color: AppColors.success, size: 60),
+            ).animate().scale(duration: 400.ms, curve: Curves.easeOutBack),
+            const SizedBox(height: 16),
+            
+            Text(
+              'Thank You for Reporting',
+              style: GoogleFonts.inter(
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+                color: AppColors.textPrimary,
+              ),
+              textAlign: TextAlign.center,
+            ).animate().fadeIn(delay: 200.ms),
+            const SizedBox(height: 8),
+            
+            Text(
+              'Your incident report has been securely submitted and logged. Our team is reviewing the evidence. You can track progress under the "My Reports" tab.',
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                color: AppColors.textSecondary,
+                height: 1.4,
+              ),
+              textAlign: TextAlign.center,
+            ).animate().fadeIn(delay: 300.ms),
+            const SizedBox(height: 20),
+            
+            // Glassmorphic status card
+            OceanGlassCard(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               child: Column(
                 children: [
-                  Text('Complaint ID:', style: TextStyle(color: Colors.grey.shade600)),
-                  const SizedBox(height: 4),
-                  Text(
-                    _submittedComplaintId ?? 'Unknown',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Complaint ID',
+                        style: GoogleFonts.inter(
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary,
+                          fontSize: 13,
+                        ),
+                      ),
+                      Text(
+                        _submittedComplaintId ?? 'UNKNOWN',
+                        style: GoogleFonts.inter(
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.primary,
+                          fontSize: 14,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ],
                   ),
-                  const Divider(height: 24),
-                  Text('Status:', style: TextStyle(color: Colors.grey.shade600)),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Pending Review',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.orange),
+                  const Divider(height: 24, color: Colors.white24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Report Status',
+                        style: GoogleFonts.inter(
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary,
+                          fontSize: 13,
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppColors.warning.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: AppColors.warning.withOpacity(0.3)),
+                        ),
+                        child: Text(
+                          'Pending Review',
+                          style: GoogleFonts.inter(
+                            color: AppColors.warning,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ),
+            ).animate().fadeIn(delay: 400.ms).slideY(begin: 0.1),
+            const SizedBox(height: 20),
+            
+            // Done Button
+            Container(
+              width: double.infinity,
+              height: 48,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(colors: AppColors.oceanGradient),
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withOpacity(0.3),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
+                  )
+                ],
+              ),
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () {
+                  // Switch tab to "My Reports" (index 1)
+                  DefaultTabController.of(context).animateTo(1);
+                  setState(() {
+                    _isSuccess = false;
+                    _isAnonymous = false;
+                    _selectedVesselType = null;
+                    _selectedActivityType = null;
+                    _descriptionController.clear();
+                    _phoneController.clear();
+                    _imageBytes = null;
+                    _hasImage = false;
+                  });
+                },
+                child: Text(
+                  'Track My Reports',
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ).animate().fadeIn(delay: 500.ms).slideY(begin: 0.1),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _AudioPlayerWidget extends StatefulWidget {
+  final String audioData;
+  const _AudioPlayerWidget({Key? key, required this.audioData}) : super(key: key);
+
+  @override
+  State<_AudioPlayerWidget> createState() => _AudioPlayerWidgetState();
+}
+
+class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
+  late AudioPlayer _audioPlayer;
+  bool _isPlaying = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _audioPlayer = AudioPlayer();
+    _audioPlayer.onPlayerStateChanged.listen((state) {
+      if (mounted) {
+        setState(() {
+          _isPlaying = state == PlayerState.playing;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _audioPlayer.dispose();
+    super.dispose();
+  }
+
+  void _togglePlay() async {
+    if (_isPlaying) {
+      await _audioPlayer.pause();
+    } else {
+      try {
+        if (widget.audioData.startsWith('data:audio')) {
+           final String base64Str = widget.audioData.split(',').last;
+           final bytes = base64Decode(base64Str);
+           await _audioPlayer.play(BytesSource(bytes));
+        } else {
+           await _audioPlayer.play(UrlSource(widget.audioData));
+        }
+      } catch (e) {
+        print("Error playing audio evidence: $e");
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.primary.withOpacity(0.1)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.border),
+            ),
+            child: IconButton(
+              icon: Icon(
+                _isPlaying ? Icons.pause : Icons.play_arrow,
+                color: AppColors.primary,
+                size: 20,
+              ),
+              onPressed: _togglePlay,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _isPlaying ? 'Playing Audio...' : 'Voice Evidence Attached',
+                  style: GoogleFonts.inter(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primary,
+                    fontSize: 12,
+                  ),
+                ),
+                Text(
+                  'Tap to listen to your recording.',
+                  style: GoogleFonts.inter(color: AppColors.textSecondary, fontSize: 10),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

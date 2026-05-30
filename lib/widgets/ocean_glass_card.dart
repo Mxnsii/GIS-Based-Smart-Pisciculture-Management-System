@@ -85,7 +85,10 @@ class _OceanGlassCardState extends State<OceanGlassCard> {
                           ],
                   ),
                 ),
-                child: widget.child,
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: widget.child,
+                ),
               ),
             ),
           ),

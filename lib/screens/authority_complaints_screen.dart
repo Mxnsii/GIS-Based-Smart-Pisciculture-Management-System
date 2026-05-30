@@ -454,6 +454,19 @@ class _AuthorityComplaintsScreenState extends State<AuthorityComplaintsScreen> {
   }
 
   void _showComplaintDetails(BuildContext context, String docId, Map<String, dynamic> data) {
+    Widget buildInfoRow(String label, String value) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 3.0),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('$label: ', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textSecondary, fontSize: 13)),
+            Expanded(child: Text(value, style: TextStyle(color: AppColors.textPrimary, fontSize: 13))),
+          ],
+        ),
+      );
+    }
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -462,9 +475,10 @@ class _AuthorityComplaintsScreenState extends State<AuthorityComplaintsScreen> {
         constraints: BoxConstraints(
           maxHeight: MediaQuery.of(context).size.height * 0.90,
         ),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          border: Border.all(color: AppColors.border, width: 1.5),
         ),
         padding: const EdgeInsets.all(24),
         child: Column(
@@ -474,11 +488,17 @@ class _AuthorityComplaintsScreenState extends State<AuthorityComplaintsScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Incident Details', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+                Text(
+                  'Incident Details',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                ),
+                IconButton(
+                  icon: Icon(Icons.close, color: AppColors.textSecondary),
+                  onPressed: () => Navigator.pop(context),
+                ),
               ],
             ),
-            const Divider(),
+            Divider(color: AppColors.divider),
             Flexible(
               child: SingleChildScrollView(
                 child: Column(
@@ -517,31 +537,31 @@ class _AuthorityComplaintsScreenState extends State<AuthorityComplaintsScreen> {
                           );
                         },
                         child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: data['imageUrl'].toString().startsWith('data:image')
-                        ? Image.memory(
-                            base64Decode(data['imageUrl'].toString().split(',').last),
-                            width: double.infinity,
-                            height: 200,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) => Container(
-                              height: 200,
-                              color: Colors.grey.shade200,
-                              child: const Center(child: Icon(Icons.broken_image, size: 50, color: Colors.grey)),
-                            ),
-                          )
-                        : Image.network(
-                            data['imageUrl'],
-                            width: double.infinity,
-                            height: 200,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) => Container(
-                              height: 200,
-                              color: Colors.grey.shade200,
-                              child: const Center(child: Icon(Icons.broken_image, size: 50, color: Colors.grey)),
-                            ),
-                          ),
-                    ),
+                          borderRadius: BorderRadius.circular(12),
+                          child: data['imageUrl'].toString().startsWith('data:image')
+                            ? Image.memory(
+                                base64Decode(data['imageUrl'].toString().split(',').last),
+                                width: double.infinity,
+                                height: 200,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) => Container(
+                                  height: 200,
+                                  color: AppColors.cardLight,
+                                  child: Center(child: Icon(Icons.broken_image, size: 50, color: AppColors.textMuted)),
+                                ),
+                              )
+                            : Image.network(
+                                data['imageUrl'],
+                                width: double.infinity,
+                                height: 200,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) => Container(
+                                  height: 200,
+                                  color: AppColors.cardLight,
+                                  child: Center(child: Icon(Icons.broken_image, size: 50, color: AppColors.textMuted)),
+                                ),
+                              ),
+                        ),
                       ),
                       const SizedBox(height: 16),
                     ] else ...[
@@ -549,16 +569,19 @@ class _AuthorityComplaintsScreenState extends State<AuthorityComplaintsScreen> {
                         width: double.infinity,
                         height: 140, // Perfectly adjusted framed box
                         decoration: BoxDecoration(
-                          color: Colors.grey.shade50,
+                          color: AppColors.cardLight,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.grey.shade200, style: BorderStyle.solid),
+                          border: Border.all(color: AppColors.border, style: BorderStyle.solid),
                         ),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.image_not_supported, size: 36, color: Colors.grey.shade300),
+                            Icon(Icons.image_not_supported, size: 36, color: AppColors.textMuted),
                             const SizedBox(height: 8),
-                            Text('No photo provided for this report', style: TextStyle(color: Colors.grey.shade500, fontSize: 13))
+                            Text(
+                              'No photo provided for this report',
+                              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                            )
                           ],
                         ),
                       ),
@@ -566,61 +589,109 @@ class _AuthorityComplaintsScreenState extends State<AuthorityComplaintsScreen> {
                     ],
                     
                     if (data['audioUrl'] != null && data['audioUrl'].toString().isNotEmpty) ...[
-                      const Text('Voice Evidence', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+                      Text(
+                        'Voice Evidence',
+                        style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textSecondary, fontSize: 12, letterSpacing: 0.5),
+                      ),
                       const SizedBox(height: 6),
                       _AudioPlayerWidget(audioData: data['audioUrl']),
                       const SizedBox(height: 20),
                     ],
 
-                    Text('Activity Type: ${data['activityType'] ?? 'N/A'}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    Text(
+                      'Activity Type: ${data['activityType'] ?? 'N/A'}',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.primary),
+                    ),
                     const SizedBox(height: 8),
-                    Text('Vessel Type: ${data['vesselType'] ?? 'N/A'}'),
+                    Text(
+                      'Vessel Type: ${data['vesselType'] ?? 'N/A'}',
+                      style: TextStyle(color: AppColors.textPrimary, fontSize: 14),
+                    ),
                     const SizedBox(height: 16),
                     
-                    const Text('Description', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+                    Text(
+                      'Description',
+                      style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textSecondary, fontSize: 12, letterSpacing: 0.5),
+                    ),
                     const SizedBox(height: 4),
-                    Text(data['description'] ?? 'No description provided.'),
+                    Text(
+                      data['description'] ?? 'No description provided.',
+                      style: TextStyle(color: AppColors.textPrimary, fontSize: 14),
+                    ),
                     const SizedBox(height: 16),
 
-                    const Text('Location Coordinates', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+                    Text(
+                      'Location Coordinates',
+                      style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textSecondary, fontSize: 12, letterSpacing: 0.5),
+                    ),
                     const SizedBox(height: 4),
                     if (data['location'] != null) ...[
                       if (data['locationName'] != null) ...[
-                        Text('${data['locationName']}', style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.blueGrey)),
+                        Text(
+                          '${data['locationName']}',
+                          style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.primary),
+                        ),
                         const SizedBox(height: 4),
                       ],
-                      Text('Lat: ${(data['location'] as GeoPoint).latitude}'),
-                      Text('Lng: ${(data['location'] as GeoPoint).longitude}'),
+                      Text(
+                        'Lat: ${(data['location'] as GeoPoint).latitude}',
+                        style: TextStyle(color: AppColors.textPrimary, fontSize: 14),
+                      ),
+                      Text(
+                        'Lng: ${(data['location'] as GeoPoint).longitude}',
+                        style: TextStyle(color: AppColors.textPrimary, fontSize: 14),
+                      ),
                     ] else ...[
-                      const Text('Not available'),
+                      Text(
+                        'Not available',
+                        style: TextStyle(color: AppColors.textPrimary, fontSize: 14),
+                      ),
                     ],
                     const SizedBox(height: 24),
 
                     if (data['aiAnalysis'] != null) ...[
-                      const Text('AI & GIS Analysis', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.deepPurple)),
+                      Text(
+                        'AI & GIS Analysis',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.secondary),
+                      ),
                       const SizedBox(height: 12),
                       Container(
-                        padding: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: Colors.deepPurple.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.deepPurple.shade200),
+                          color: AppColors.cardLight,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.border),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Priority: ${data['aiAnalysis']['priority']}', style: TextStyle(fontWeight: FontWeight.bold, color: _getPriorityColor(data['aiAnalysis']['priority'] as String?))),
+                            Row(
+                              children: [
+                                Text('Priority: ', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textSecondary, fontSize: 13)),
+                                Text(
+                                  '${data['aiAnalysis']['priority']}',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: _getPriorityColor(data['aiAnalysis']['priority'] as String?),
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            ),
                             const SizedBox(height: 4),
-                            Text('Category: ${data['aiAnalysis']['category']}'),
-                            const SizedBox(height: 4),
-                            Text('Hotspot: ${data['aiAnalysis']['isHotspot'] == true ? "Yes" : "No"}'),
-                            const SizedBox(height: 4),
-                            Text('PFZ Status: ${data['aiAnalysis']['pfzProximity']}'),
-                            const SizedBox(height: 4),
-                            Text('CRZ Violation: ${data['aiAnalysis']['crzViolation'] == true ? "Yes" : "No"}'),
+                            buildInfoRow('Category', data['aiAnalysis']['category']?.toString() ?? 'N/A'),
+                            buildInfoRow('Hotspot', data['aiAnalysis']['isHotspot'] == true ? "Yes" : "No"),
+                            buildInfoRow('PFZ Status', data['aiAnalysis']['pfzProximity']?.toString() ?? data['aiAnalysis']['pfzStatus']?.toString() ?? 'N/A'),
+                            buildInfoRow('CRZ Violation', data['aiAnalysis']['crzViolation'] == true ? "Yes" : "No"),
                             const SizedBox(height: 8),
-                            const Divider(),
-                            Text('Summary: ${data['aiAnalysis']['summary']}', style: const TextStyle(fontStyle: FontStyle.italic)),
+                            Divider(color: AppColors.border),
+                            const SizedBox(height: 8),
+                            Text('Summary:', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textSecondary, fontSize: 12)),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${data['aiAnalysis']['summary']}',
+                              style: TextStyle(fontStyle: FontStyle.italic, color: AppColors.textPrimary, fontSize: 13),
+                            ),
                           ],
                         ),
                       ),
@@ -628,7 +699,10 @@ class _AuthorityComplaintsScreenState extends State<AuthorityComplaintsScreen> {
                     ],
 
                     // Update Status Section
-                    const Text('Update Status', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    Text(
+                      'Update Status',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textPrimary),
+                    ),
                     const SizedBox(height: 12),
                     Wrap(
                       spacing: 8,
@@ -655,9 +729,9 @@ class _AuthorityComplaintsScreenState extends State<AuthorityComplaintsScreen> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: _getStatusColor(data['status'] ?? 'Pending').withOpacity(0.05),
+                        color: _getStatusColor(data['status'] ?? 'Pending').withOpacity(0.08),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: _getStatusColor(data['status'] ?? 'Pending').withOpacity(0.3)),
+                        border: Border.all(color: _getStatusColor(data['status'] ?? 'Pending').withOpacity(0.35)),
                       ),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -667,7 +741,7 @@ class _AuthorityComplaintsScreenState extends State<AuthorityComplaintsScreen> {
                           Expanded(
                             child: Text(
                               _getStatusDescription(data['status'] ?? 'Pending'),
-                              style: TextStyle(color: Colors.grey.shade800, fontSize: 13, height: 1.4),
+                              style: TextStyle(color: AppColors.textSecondary, fontSize: 13, height: 1.4),
                             ),
                           ),
                         ],
@@ -808,21 +882,22 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.blue.shade50,
+        color: AppColors.cardLight,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.blue.shade200),
+        border: Border.all(color: AppColors.border),
       ),
       child: Row(
         children: [
           Container(
-            decoration: const BoxDecoration(
-              color: Colors.white,
+            decoration: BoxDecoration(
+              color: AppColors.surface,
               shape: BoxShape.circle,
+              border: Border.all(color: AppColors.border),
             ),
             child: IconButton(
               icon: Icon(
                 _isPlaying ? Icons.pause : Icons.play_arrow,
-                color: Colors.blue.shade700,
+                color: AppColors.primary,
               ),
               onPressed: _togglePlay,
             ),
@@ -836,13 +911,13 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
                   _isPlaying ? 'Playing Audio...' : 'Voice Evidence Attached',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    color: Colors.blue.shade900,
+                    color: AppColors.primary,
                     fontSize: 14,
                   ),
                 ),
                 Text(
                   'Tap to listen to the farmer\'s recording.',
-                  style: TextStyle(color: Colors.blue.shade700, fontSize: 12),
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
                 ),
               ],
             ),
