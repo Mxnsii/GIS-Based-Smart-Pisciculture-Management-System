@@ -18,9 +18,11 @@ class IotMonitoringScreen extends StatefulWidget {
 
 class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
   Map<String, String> _lastAlertedIssues = {"Tilapia": "", "Asian Seabass": ""};
+  static final Set<String> _acknowledgedAlerts = {};
 
   void _checkAndAlert(int riskLevel, BuildContext context, String species, String disease) {
-    if (riskLevel > 0 && _lastAlertedIssues[species] != disease) {
+    final alertKey = "$species-$disease";
+    if (riskLevel > 0 && !_acknowledgedAlerts.contains(alertKey) && _lastAlertedIssues[species] != disease) {
       _lastAlertedIssues[species] = disease;
       NotificationService.showNotification(
         id: species.hashCode,
@@ -30,6 +32,7 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         showDialog(
           context: context,
+          barrierDismissible: false, // Ensure acknowledgement action
           builder: (ctx) => AlertDialog(
             backgroundColor: AppColors.surface,
             title: Row(
@@ -64,7 +67,12 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
                   backgroundColor: riskLevel == 2 ? AppColors.danger : AppColors.warning,
                   foregroundColor: Colors.white,
                 ),
-                onPressed: () => Navigator.of(ctx).pop(),
+                onPressed: () {
+                  setState(() {
+                    _acknowledgedAlerts.add(alertKey);
+                  });
+                  Navigator.of(ctx).pop();
+                },
                 child: const Text('Acknowledge'),
               ),
             ],
@@ -73,6 +81,8 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
       });
     } else if (riskLevel == 0) {
       _lastAlertedIssues[species] = "";
+      // Reset acknowledgment when returning to healthy state
+      _acknowledgedAlerts.removeWhere((key) => key.startsWith("$species-"));
     }
   }
 
