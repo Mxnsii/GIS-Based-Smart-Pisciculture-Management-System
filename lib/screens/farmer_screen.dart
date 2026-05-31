@@ -7,6 +7,7 @@ import 'hatcheries_screen.dart';
 import 'login_screen.dart';
 import 'govt_schemes_screen.dart';
 import 'complaint_registry_screen.dart';
+import 'chatbot_screen.dart';
 import 'fish_directory_screen.dart';
 import 'species_recommendation_screen.dart';
 import '../theme/app_theme.dart';
@@ -75,6 +76,7 @@ class _FarmerScreenState extends State<FarmerScreen> {
             ],
           ),
       ),
+      floatingActionButton: _buildFAB(context),
       extendBody: true, // Allows content behind bottom nav bar
       bottomNavigationBar: _buildNavBar(),
     );
@@ -191,6 +193,29 @@ class _FarmerScreenState extends State<FarmerScreen> {
     );
   }
 
+  Widget _buildFAB(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(30),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.secondary.withOpacity(0.4),
+            blurRadius: 20,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: FloatingActionButton.extended(
+        onPressed: () => Navigator.push(
+          context, MaterialPageRoute(builder: (_) => const ChatbotScreen())),
+        backgroundColor: AppColors.secondary,
+        icon: const Icon(Icons.support_agent_rounded, color: Colors.white),
+        label: Text('GIS Agent',
+            style: GoogleFonts.inter(
+                color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
+      ),
+    ).animate().scale(duration: 300.ms, delay: 200.ms, curve: Curves.easeOutBack);
+  }
 
   Widget _buildNavBar() {
     return Container(
