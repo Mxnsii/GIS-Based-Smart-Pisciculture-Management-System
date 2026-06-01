@@ -286,7 +286,6 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
                           initialLng: widget.farmData['lng'] is String ? double.tryParse(widget.farmData['lng']) : widget.farmData['lng'].toDouble(),
                           initialZoom: 16,
                           isAuthority: widget.isAuthority,
-                          farms: [widget.farmData],
                         ),
               ),
             );
