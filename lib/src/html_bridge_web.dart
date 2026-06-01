@@ -1,38 +1,40 @@
 // Web implementation for posting messages to the iframe created by qgis2web export.
-import 'dart:async';
 import 'dart:html' as html;
+import 'dart:convert';
 
-String? _pendingMessage;
-Timer? _retryTimer;
+String? _latestPayload;
+bool _listenerRegistered = false;
 
-void postMessageToIframe(String message) {
-  _pendingMessage = message;
-  _retryTimer?.cancel();
-  _retryTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
+void _ensureListenerRegistered() {
+  if (_listenerRegistered) return;
+  _listenerRegistered = true;
+  html.window.addEventListener('message', (event) {
     try {
-      final iframe = html.document.getElementById('gis-map-iframe') as html.IFrameElement?;
-      final payload = _pendingMessage;
-      if (iframe != null && iframe.contentWindow != null && payload != null) {
-        iframe.contentWindow!.postMessage(payload, '*');
-        _pendingMessage = null;
-        timer.cancel();
-      }
-      if (timer.tick >= 50) {
-        timer.cancel();
+      final data = event is html.MessageEvent ? event.data : null;
+      final parsed = (data is String) ? (data.isNotEmpty ? jsonDecode(data) : null) : data;
+      if (parsed != null && parsed['type'] == 'mapReady') {
+        final payload = _latestPayload;
+        if (payload != null) {
+          final iframe = html.document.getElementById('gis-map-iframe') as html.IFrameElement?;
+          if (iframe != null && iframe.contentWindow != null) {
+            iframe.contentWindow!.postMessage(payload, '*');
+          }
+        }
       }
     } catch (e) {
-      if (timer.tick >= 50) {
-        timer.cancel();
-      }
+      // ignore
     }
   });
+}
+
+void postMessageToIframe(String message) {
+  _latestPayload = message;
+  _ensureListenerRegistered();
 
   try {
     final iframe = html.document.getElementById('gis-map-iframe') as html.IFrameElement?;
     if (iframe != null && iframe.contentWindow != null) {
       iframe.contentWindow!.postMessage(message, '*');
-      _pendingMessage = null;
-      _retryTimer?.cancel();
     }
   } catch (e) {
     // ignore cross-origin errors

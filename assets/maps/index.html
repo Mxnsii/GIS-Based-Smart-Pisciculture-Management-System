@@ -168,7 +168,7 @@
         map.addLayer(layer_OSMStandard_1);
         
         map.createPane('pane_Satellite_0');
-        map.getPane('pane_Satellite_0').style.zIndex = 399;
+        map.getPane('pane_Satellite_0').style.zIndex = 401;
         var layer_Satellite_0 = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
             pane: 'pane_Satellite_0',
             opacity: 1.0,
@@ -258,20 +258,23 @@
         window.complaintHeatLayer = complaintHeatLayer;
         window.complaintMarkerGroup = complaintMarkerGroup;
         
+        var baseTree = [
+            {label: "OSM Standard", layer: layer_OSMStandard_1},
+            {label: "🛰️ Satellite View", layer: layer_Satellite_0}
+        ];
+        
         var overlaysTree = [
             {label: "🌾 Farm Clusters", layer: farmClusterGroup},
             {label: "🚨 Complaint Hotspots (Heatmap)", layer: complaintHeatLayer},
             {label: "🚨 Complaint Clusters", layer: complaintMarkerGroup},
-            {label: "🛰️ Satellite View", layer: layer_Satellite_0},
             {label: "Eastward sea water velocity", layer: layer_Eastwardseawatervelocity_7},
             {label: "Westward sea water velocity", layer: layer_Westwardseawatervelocity_6},
             {label: "Bathymetry(Ocean Depth)", layer: layer_BathymetryOceanDepth_5},
             {label: "Brackish Farms ", layer: layer_BrackishFarms_4},
             {label: "suitable_zones_for_sea_cage", layer: layer_suitable_zones_for_sea_cage_3},
             {label: "Salinity Zones", layer: layer_SalinityZones_2},
-            {label: "OSM Standard", layer: layer_OSMStandard_1},
             {label: "GEBCO_LATEST", layer: layer_GEBCO_LATEST_0},]
-        var lay = L.control.layers.tree(null, overlaysTree,{
+        var lay = L.control.layers.tree(baseTree, overlaysTree,{
             //namedToggle: true,
             //selectorBack: false,
             //closedSymbol: '&#8862; &#x1f5c0;',
@@ -390,6 +393,15 @@
                     console.error('Error processing message from Flutter:', err);
                 }
             }, false);
+
+            // Signal to the parent that we are ready to receive data
+            try {
+                if (window.parent && window.parent !== window) {
+                    window.parent.postMessage(JSON.stringify({type: 'mapReady'}), '*');
+                }
+            } catch (e) {
+                console.error('Error signaling mapReady:', e);
+            }
         </script>        
     </body>
 </html>

@@ -122,8 +122,21 @@ class _GisMapViewState extends State<GisMapView> {
   }
 
   Map<String, dynamic>? _normalizeFarm(Map<String, dynamic> source, {String? id}) {
-    final lat = _toDouble(source['lat']);
-    final lng = _toDouble(source['lng']);
+    double? lat = _toDouble(source['lat']) ?? _toDouble(source['latitude']);
+    double? lng = _toDouble(source['lng']) ?? _toDouble(source['longitude']);
+
+    final location = source['location'];
+    if ((lat == null || lng == null) && location is GeoPoint) {
+      lat = location.latitude;
+      lng = location.longitude;
+    }
+
+    // Try finding latitude/longitude in nested map location if any
+    if ((lat == null || lng == null) && location is Map) {
+      lat = _toDouble(location['lat']) ?? _toDouble(location['latitude']);
+      lng = _toDouble(location['lng']) ?? _toDouble(location['longitude']);
+    }
+
     if (lat == null || lng == null) {
       return null;
     }
@@ -191,6 +204,41 @@ class _GisMapViewState extends State<GisMapView> {
   Map<String, dynamic> _sanitizeMapForJson(Map<String, dynamic> source) {
     final sanitized = <String, dynamic>{};
     source.forEach((key, value) {
+      if (value == null) {
+        sanitized[key] = null;
+        return;
+      }
+
+      bool handled = false;
+      try {
+        final date = (value as dynamic).toDate();
+        if (date != null) {
+          if (date is DateTime) {
+            sanitized[key] = date.toIso8601String();
+            handled = true;
+          } else {
+            sanitized[key] = DateTime.parse(date.toString()).toIso8601String();
+            handled = true;
+          }
+        }
+      } catch (_) {}
+
+      if (handled) return;
+
+      try {
+        final double? latitude = _toDouble((value as dynamic).latitude);
+        final double? longitude = _toDouble((value as dynamic).longitude);
+        if (latitude != null && longitude != null) {
+          sanitized[key] = {
+            'latitude': latitude,
+            'longitude': longitude,
+          };
+          handled = true;
+        }
+      } catch (_) {}
+
+      if (handled) return;
+
       if (value is GeoPoint) {
         sanitized[key] = {
           'latitude': value.latitude,
@@ -204,12 +252,35 @@ class _GisMapViewState extends State<GisMapView> {
         sanitized[key] = _sanitizeMapForJson(Map<String, dynamic>.from(value));
       } else if (value is List) {
         sanitized[key] = value.map((item) {
-          if (item is Map) {
-            return _sanitizeMapForJson(Map<String, dynamic>.from(item));
-          } else if (item is GeoPoint) {
+          if (item == null) return null;
+
+          try {
+            final date = (item as dynamic).toDate();
+            if (date != null) {
+              if (date is DateTime) {
+                return date.toIso8601String();
+              } else {
+                return DateTime.parse(date.toString()).toIso8601String();
+              }
+            }
+          } catch (_) {}
+
+          try {
+            final double? lat = _toDouble((item as dynamic).latitude);
+            final double? lng = _toDouble((item as dynamic).longitude);
+            if (lat != null && lng != null) {
+              return {'latitude': lat, 'longitude': lng};
+            }
+          } catch (_) {}
+
+          if (item is GeoPoint) {
             return {'latitude': item.latitude, 'longitude': item.longitude};
           } else if (item is Timestamp) {
             return item.toDate().toIso8601String();
+          } else if (item is DateTime) {
+            return item.toIso8601String();
+          } else if (item is Map) {
+            return _sanitizeMapForJson(Map<String, dynamic>.from(item));
           }
           return item;
         }).toList();
@@ -269,6 +340,7 @@ class _GisMapViewState extends State<GisMapView> {
                              '<strong style="color: ' + color + ';">' + (f.name || 'Farm') + '</strong><br/>' + 
                              '<small>Owner: ' + (f.owner || '') + '</small><br/>' +
                              '<small>Status: ' + (f.status || '') + '</small><br/>' +
+                             '<small><b>Coordinates:</b> (' + f.lat.toFixed(5) + ', ' + f.lng.toFixed(5) + ')</small><br/>' +
                              '<button onclick="window.location.href=\\'app://farm/' + (f.id || '') + '\\'"; style="margin-top: 8px; padding: 4px 8px; background-color: ' + color + '; color: white; border: none; border-radius: 4px; cursor: pointer;">VIEW DETAILS</button>' +
                              '</div>';
                   m.bindPopup(popup);
