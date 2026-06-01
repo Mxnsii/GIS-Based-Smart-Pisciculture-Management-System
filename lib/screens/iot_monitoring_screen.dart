@@ -17,10 +17,18 @@ class IotMonitoringScreen extends StatefulWidget {
 }
 
 class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
-  Map<String, String> _lastAlertedIssues = {"Tilapia": "", "Asian Seabass": ""};
+  Map<String, String> _lastAlertedIssues = {
+    "Whiteleg Shrimp": "",
+    "Tiger Shrimp": "",
+    "Tilapia": "",
+    "Catfish": "",
+    "Milkfish": "",
+  };
+  static final Set<String> _acknowledgedAlerts = {};
 
   void _checkAndAlert(int riskLevel, BuildContext context, String species, String disease) {
-    if (riskLevel > 0 && _lastAlertedIssues[species] != disease) {
+    final alertKey = "$species-$disease";
+    if (riskLevel > 0 && !_acknowledgedAlerts.contains(alertKey) && _lastAlertedIssues[species] != disease) {
       _lastAlertedIssues[species] = disease;
       NotificationService.showNotification(
         id: species.hashCode,
@@ -30,6 +38,7 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         showDialog(
           context: context,
+          barrierDismissible: false, // Ensure acknowledgement action
           builder: (ctx) => AlertDialog(
             backgroundColor: AppColors.surface,
             title: Row(
@@ -64,7 +73,12 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
                   backgroundColor: riskLevel == 2 ? AppColors.danger : AppColors.warning,
                   foregroundColor: Colors.white,
                 ),
-                onPressed: () => Navigator.of(ctx).pop(),
+                onPressed: () {
+                  setState(() {
+                    _acknowledgedAlerts.add(alertKey);
+                  });
+                  Navigator.of(ctx).pop();
+                },
                 child: const Text('Acknowledge'),
               ),
             ],
@@ -73,6 +87,8 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
       });
     } else if (riskLevel == 0) {
       _lastAlertedIssues[species] = "";
+      // Reset acknowledgment when returning to healthy state
+      _acknowledgedAlerts.removeWhere((key) => key.startsWith("$species-"));
     }
   }
 
@@ -413,9 +429,15 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
                 ],
               ),
               const SizedBox(height: 20),
-              _buildRiskProfile("Tilapia", tempVal, phVal, turbidityVal).animate().fadeIn(delay: 700.ms).slideX(begin: 0.1),
+              _buildRiskProfile("Whiteleg Shrimp", tempVal, phVal, turbidityVal, salinityVal).animate().fadeIn(delay: 500.ms).slideX(begin: 0.1),
               const SizedBox(height: 16),
-              _buildRiskProfile("Asian Seabass", tempVal, phVal, turbidityVal).animate().fadeIn(delay: 800.ms).slideX(begin: 0.1),
+              _buildRiskProfile("Tiger Shrimp", tempVal, phVal, turbidityVal, salinityVal).animate().fadeIn(delay: 600.ms).slideX(begin: 0.1),
+              const SizedBox(height: 16),
+              _buildRiskProfile("Tilapia", tempVal, phVal, turbidityVal, salinityVal).animate().fadeIn(delay: 700.ms).slideX(begin: 0.1),
+              const SizedBox(height: 16),
+              _buildRiskProfile("Catfish", tempVal, phVal, turbidityVal, salinityVal).animate().fadeIn(delay: 800.ms).slideX(begin: 0.1),
+              const SizedBox(height: 16),
+              _buildRiskProfile("Milkfish", tempVal, phVal, turbidityVal, salinityVal).animate().fadeIn(delay: 900.ms).slideX(begin: 0.1),
             ],
           ),
         ),
@@ -424,14 +446,14 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
     );
   }
 
-  Widget _buildRiskProfile(String species, double tempVal, double phVal, double turbidityVal) {
+  Widget _buildRiskProfile(String species, double tempVal, double phVal, double turbidityVal, double salinityVal) {
     return FutureBuilder<String>(
       future: MlPredictionService.getPrediction(
-        species: species == "Asian Seabass" ? "Seabass" : species,
+        species: species,
         temperature: tempVal,
         ph: phVal,
         turbidity: turbidityVal,
-        salinity: 0.0,
+        salinity: salinityVal,
       ),
       builder: (context, snapshot) {
         bool isWaiting = snapshot.connectionState == ConnectionState.waiting;

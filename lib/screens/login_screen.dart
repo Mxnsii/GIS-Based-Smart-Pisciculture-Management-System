@@ -186,22 +186,6 @@ if (_isAuthority) {
                       ),
                       const SizedBox(height: 24),
 
-                      if (!_isAuthority)
-                        OutlinedButton.icon(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const ChatbotScreen(),
-                              ),
-                            );
-                          },
-                          icon: const Icon(Icons.support_agent),
-                          label: const Text('Open GIS Agent'),
-                        ),
-
-                      if (!_isAuthority) const SizedBox(height: 16),
-
                       // Form Fields
                       if (!_isLogin) 
                         CustomTextField(
