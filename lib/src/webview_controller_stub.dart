@@ -17,16 +17,26 @@ class WebViewController {
 
 enum JavaScriptMode { unrestricted, restricted }
 
+class NavigationRequest {
+  NavigationRequest({required this.url, required this.isMainFrame});
+  final String url;
+  final bool isMainFrame;
+}
+
+enum NavigationDecision { prevent, navigate }
+
 class NavigationDelegate {
   NavigationDelegate({
     this.onPageStarted,
     this.onPageFinished,
     this.onWebResourceError,
+    this.onNavigationRequest,
   });
 
   final void Function(String)? onPageStarted;
   final void Function(String)? onPageFinished;
   final void Function(WebResourceError)? onWebResourceError;
+  final dynamic onNavigationRequest;
 }
 
 class WebResourceError {
@@ -35,7 +45,7 @@ class WebResourceError {
 }
 
 class WebViewWidget extends StatelessWidget {
-  const WebViewWidget({required this.controller});
+  const WebViewWidget({super.key, required this.controller});
   final WebViewController controller;
 
   @override

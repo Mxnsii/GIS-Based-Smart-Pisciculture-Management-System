@@ -238,10 +238,7 @@
         map.addLayer(layer_Eastwardseawatervelocity_7);
         
         // Initialize dynamic layers for farms and complaints BEFORE overlaysTree
-        var farmClusterGroup = L.markerClusterGroup({
-            maxClusterRadius: 80,
-            disableClusteringAtZoom: 16
-        }).addTo(map);
+        var farmClusterGroup = L.featureGroup().addTo(map);
         
         var complaintHeatLayer = L.layerGroup().addTo(map);
         
@@ -268,7 +265,7 @@
         ];
         
         var overlaysTree = [
-            {label: "🌾 Farm Clusters", layer: farmClusterGroup},
+            {label: "🌾 Registered Farms", layer: farmClusterGroup},
             {label: "🚨 Complaint Hotspots (Heatmap)", layer: complaintHeatLayer},
             {label: "🚨 Complaint Clusters", layer: complaintMarkerGroup},
             {label: "Eastward sea water velocity", layer: layer_Eastwardseawatervelocity_7},
@@ -306,6 +303,11 @@
                     complaintMarkerGroup.clearLayers();
                     complaintHeatLayer.clearLayers();
 
+                    // Center and zoom map if specified
+                    if (data.initialLat != null && data.initialLng != null) {
+                        map.setView([data.initialLat, data.initialLng], data.initialZoom || 16);
+                    }
+
                     // Process farms with clustering
                     if (data.farms && Array.isArray(data.farms)) {
                         data.farms.forEach(function(f){
@@ -340,7 +342,7 @@
                                             if(window.parent && window.parent !== window){
                                                 parent.postMessage(JSON.stringify({type:'openFarm', id: f.id}), '*');
                                             } else {
-                                                window.location.href = 'app://farm/' + f.id;
+                                                window.location.href = 'https://app.farm/' + f.id;
                                             }
                                         } catch(e){ console.error(e); }
                                     };
