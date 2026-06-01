@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
@@ -519,9 +520,11 @@ class _AuthorityComplaintsScreenState extends State<AuthorityComplaintsScreen> {
                                     panEnabled: true,
                                     minScale: 0.5,
                                     maxScale: 4.0,
-                                    child: data['imageUrl'].toString().startsWith('data:image')
-                                        ? Image.memory(base64Decode(data['imageUrl'].toString().split(',').last), fit: BoxFit.contain)
-                                        : Image.network(data['imageUrl'], fit: BoxFit.contain),
+                                    child: !_isNetworkUrl(data['imageUrl']?.toString())
+                                        ? (_getBytesFromBase64(data['imageUrl']?.toString()) != null
+                                            ? Image.memory(_getBytesFromBase64(data['imageUrl']!.toString())!, fit: BoxFit.contain)
+                                            : const Center(child: Icon(Icons.broken_image, size: 50, color: Colors.white24)))
+                                        : Image.network(data['imageUrl'].toString(), fit: BoxFit.contain),
                                   ),
                                   Container(
                                     margin: const EdgeInsets.all(8),
@@ -538,20 +541,21 @@ class _AuthorityComplaintsScreenState extends State<AuthorityComplaintsScreen> {
                         },
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(12),
-                          child: data['imageUrl'].toString().startsWith('data:image')
-                            ? Image.memory(
-                                base64Decode(data['imageUrl'].toString().split(',').last),
-                                width: double.infinity,
-                                height: 200,
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) => Container(
-                                  height: 200,
-                                  color: AppColors.cardLight,
-                                  child: Center(child: Icon(Icons.broken_image, size: 50, color: AppColors.textMuted)),
-                                ),
-                              )
+                          child: !_isNetworkUrl(data['imageUrl']?.toString())
+                            ? (_getBytesFromBase64(data['imageUrl']?.toString()) != null
+                                ? Image.memory(
+                                    _getBytesFromBase64(data['imageUrl']!.toString())!,
+                                    width: double.infinity,
+                                    height: 200,
+                                    fit: BoxFit.cover,
+                                  )
+                                : Container(
+                                    height: 200,
+                                    color: AppColors.cardLight,
+                                    child: Center(child: Icon(Icons.broken_image, size: 50, color: AppColors.textMuted)),
+                                  ))
                             : Image.network(
-                                data['imageUrl'],
+                                data['imageUrl'].toString(),
                                 width: double.infinity,
                                 height: 200,
                                 fit: BoxFit.cover,
@@ -865,7 +869,7 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
     } else {
       try {
         if (widget.audioData.startsWith('data:audio')) {
-           final String base64Str = widget.audioData.split(',').last;
+           final String base64Str = widget.audioData.split(',').last.replaceAll(RegExp(r'\s+'), '');
            final bytes = base64Decode(base64Str);
            await _audioPlayer.play(BytesSource(bytes));
         } else {
@@ -925,5 +929,24 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
         ],
       ),
     );
+  }
+}
+
+bool _isNetworkUrl(String? url) {
+  if (url == null) return false;
+  return url.startsWith('http://') || url.startsWith('https://');
+}
+
+Uint8List? _getBytesFromBase64(String? base64Str) {
+  if (base64Str == null || base64Str.isEmpty) return null;
+  try {
+    String cleanStr = base64Str.trim().replaceAll(RegExp(r'\s+'), '');
+    if (cleanStr.startsWith('data:')) {
+      cleanStr = cleanStr.split(',').last;
+    }
+    return base64Decode(cleanStr);
+  } catch (e) {
+    print("Error decoding base64 image: $e");
+    return null;
   }
 }
