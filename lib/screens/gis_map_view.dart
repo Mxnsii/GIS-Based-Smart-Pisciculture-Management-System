@@ -99,7 +99,13 @@ class _GisMapViewState extends State<GisMapView> {
       _pushMapUpdate();
     });
 
-    _pushMapUpdate();
+    if (kIsWeb) {
+      Future.delayed(const Duration(milliseconds: 1000), () {
+        _pushMapUpdate();
+      });
+    } else {
+      _pushMapUpdate();
+    }
   }
 
   double? _toDouble(dynamic value) {
@@ -171,12 +177,47 @@ class _GisMapViewState extends State<GisMapView> {
           .whereType<Map<String, dynamic>>()
           .toList();
 
-      final payload = jsonEncode({'farms': farms, 'complaints': complaints});
+      final sanitizedFarms = farms.map((f) => _sanitizeMapForJson(f)).toList();
+      final sanitizedComplaints = complaints.map((c) => _sanitizeMapForJson(c)).toList();
+
+      final payload = jsonEncode({'farms': sanitizedFarms, 'complaints': sanitizedComplaints});
       _latestPayload = payload;
       _flushLatestPayload();
     } catch (e) {
       debugPrint('Error loading map data: $e');
     }
+  }
+
+  Map<String, dynamic> _sanitizeMapForJson(Map<String, dynamic> source) {
+    final sanitized = <String, dynamic>{};
+    source.forEach((key, value) {
+      if (value is GeoPoint) {
+        sanitized[key] = {
+          'latitude': value.latitude,
+          'longitude': value.longitude,
+        };
+      } else if (value is Timestamp) {
+        sanitized[key] = value.toDate().toIso8601String();
+      } else if (value is DateTime) {
+        sanitized[key] = value.toIso8601String();
+      } else if (value is Map) {
+        sanitized[key] = _sanitizeMapForJson(Map<String, dynamic>.from(value));
+      } else if (value is List) {
+        sanitized[key] = value.map((item) {
+          if (item is Map) {
+            return _sanitizeMapForJson(Map<String, dynamic>.from(item));
+          } else if (item is GeoPoint) {
+            return {'latitude': item.latitude, 'longitude': item.longitude};
+          } else if (item is Timestamp) {
+            return item.toDate().toIso8601String();
+          }
+          return item;
+        }).toList();
+      } else {
+        sanitized[key] = value;
+      }
+    });
+    return sanitized;
   }
 
   void _flushLatestPayload() {
