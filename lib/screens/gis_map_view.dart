@@ -357,18 +357,26 @@ class _GisMapViewState extends State<GisMapView> {
                   // Add to heatmap
                   complaintHeatData.push([c.lat, c.lng, 0.8]);
                   
-                  // Add to cluster
-                  var cm = L.circleMarker([c.lat, c.lng], {
-                    radius: 6,
-                    color: '#A21CAF',
-                    fillColor: '#A21CAF',
-                    fillOpacity: 0.85,
-                    weight: 2
+                  // Add to cluster with premium glowing single icon
+                  var cm = L.marker([c.lat, c.lng], {
+                    icon: L.divIcon({
+                      html: '<div style="background-color: #E11D48; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; border: 2px solid white; box-shadow: 0 0 10px rgba(225, 29, 72, 0.8), 0 0 15px rgba(225, 29, 72, 0.5); width: 22px; height: 22px; animation: pulse 2.5s infinite alternate;">🚨</div>',
+                      iconSize: [22, 22],
+                      className: 'custom-complaint-single-marker'
+                    })
                   });
                   
+                  var imgTag = '';
+                  if (c.imageUrl) {
+                    imgTag = '<div style="margin-top: 8px; margin-bottom: 8px; border-radius: 4px; overflow: hidden; border: 1px solid #E2E8F0;">' +
+                             '<img src="' + c.imageUrl + '" style="width: 100%; max-height: 120px; object-fit: cover; display: block;" alt="Complaint Evidence"/>' +
+                             '</div>';
+                  }
+                  
                   var popup = '<div style="font-size: 12px; max-width: 200px;">' +
-                             '<b style="color: #A21CAF;">Activity: ' + (c.activityType || 'Unknown') + '</b><br/>' + 
+                             '<b style="color: #E11D48;">Activity: ' + (c.activityType || 'Unknown') + '</b><br/>' + 
                              (c.description || 'No description') + '<br/>' +
+                             imgTag +
                              '<small><i>Location: (' + c.lat.toFixed(4) + ', ' + c.lng.toFixed(4) + ')</i></small>' +
                              '</div>';
                   cm.bindPopup(popup);
