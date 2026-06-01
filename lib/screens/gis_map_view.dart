@@ -325,9 +325,10 @@ class _GisMapViewState extends State<GisMapView> {
               if(data.farms && Array.isArray(data.farms)) {
                 data.farms.forEach(function(f) {
                   if(f.lat == null || f.lng == null) return;
-                  var color = (f.status === 'Active') ? '#22C55E' : 
-                             (f.status === 'Pending Approval') ? '#F59E0B' : 
-                             (f.status === 'Rejected') ? '#EF4444' : '#9CA3AF';
+                   var color = (f.status === 'Active') ? '#22C55E' : 
+                              (f.status === 'Pending Approval' || f.status === 'Pending') ? '#F59E0B' : 
+                              (f.status === 'Rejected') ? '#EF4444' : 
+                              (f.status === 'Inactive') ? '#9CA3AF' : '#9CA3AF';
                   var m = L.circleMarker([f.lat, f.lng], {
                     radius: 7,
                     color: color,
