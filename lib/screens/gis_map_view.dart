@@ -5,7 +5,7 @@ import 'dart:async';
 import 'dart:convert';
 
 // Conditional imports for web/mobile platforms
-import '../src/webview_controller_stub.dart' if (dart.library.html) '../src/webview_controller_web.dart';
+import '../src/webview_controller_web.dart' if (dart.library.html) '../src/webview_controller_stub.dart';
 import '../src/html_bridge_stub.dart' if (dart.library.html) '../src/html_bridge_web.dart';
 import '../widgets/custom_back_button.dart';
 
