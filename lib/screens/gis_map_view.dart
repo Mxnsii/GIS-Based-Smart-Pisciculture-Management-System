@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
-import 'package:webview_flutter/webview_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:async';
 import 'dart:convert';
 
-// Conditional imports for web platform
+// Conditional imports for web/mobile platforms
+import '../src/webview_controller_stub.dart' if (dart.library.html) '../src/webview_controller_web.dart';
 import '../src/html_bridge_stub.dart' if (dart.library.html) '../src/html_bridge_web.dart';
 import '../widgets/custom_back_button.dart';
 
@@ -31,13 +32,31 @@ class GisMapView extends StatefulWidget {
 }
 
 class _GisMapViewState extends State<GisMapView> {
-  late WebViewController _webViewController;
+  WebViewController? _webViewController;
   bool _isMapLoaded = false;
+  StreamSubscription<QuerySnapshot>? _farmsSubscription;
+  StreamSubscription<QuerySnapshot>? _complaintsSubscription;
+  String? _latestPayload;
+  bool _hasStartedSync = false;
 
   @override
   void initState() {
     super.initState();
-    _initializeWebViewController();
+    if (!kIsWeb) {
+      _initializeWebViewController();
+    } else {
+      // On web, start syncing once the iframe view is inserted.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _startRealtimeMapSync();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _farmsSubscription?.cancel();
+    _complaintsSubscription?.cancel();
+    super.dispose();
   }
 
   void _initializeWebViewController() {
@@ -53,8 +72,8 @@ class _GisMapViewState extends State<GisMapView> {
             setState(() {
               _isMapLoaded = true;
             });
-            // Load farm and complaint data from Firestore then send to map
-            _loadAndSendMapData();
+            _startRealtimeMapSync();
+            _flushLatestPayload();
           },
           onWebResourceError: (WebResourceError error) {
             debugPrint('GIS Map: Web resource error: ${error.description}');
@@ -64,96 +83,207 @@ class _GisMapViewState extends State<GisMapView> {
       ..loadFlutterAsset('assets/maps/index.html');
   }
 
-  Future<void> _loadAndSendMapData() async {
-    try {
-      // Fetch farms
-      final farmsSnapshot = await FirebaseFirestore.instance.collection('farms').get();
-      final farms = farmsSnapshot.docs.map((d) {
-        final data = Map<String, dynamic>.from(d.data());
-        data['id'] = d.id;
-        // Ensure numeric lat/lng
-        data['lat'] = (data['lat'] is String) ? double.tryParse(data['lat']) ?? 0.0 : (data['lat'] ?? 0.0);
-        data['lng'] = (data['lng'] is String) ? double.tryParse(data['lng']) ?? 0.0 : (data['lng'] ?? 0.0);
-        return data;
-      }).toList();
+  void _startRealtimeMapSync() {
+    if (_hasStartedSync) {
+      return;
+    }
+    _hasStartedSync = true;
 
-      // Fetch complaints (hotspots)
-      final compSnapshot = await FirebaseFirestore.instance.collection('complaints').get();
-      final complaints = compSnapshot.docs.map((d) {
-        final data = Map<String, dynamic>.from(d.data());
-        data['id'] = d.id;
-        data['lat'] = (data['lat'] is String) ? double.tryParse(data['lat']) ?? 0.0 : (data['lat'] ?? 0.0);
-        data['lng'] = (data['lng'] is String) ? double.tryParse(data['lng']) ?? 0.0 : (data['lng'] ?? 0.0);
-        return data;
-      }).toList();
+    if (widget.farms == null || widget.farms!.isEmpty) {
+      _farmsSubscription = FirebaseFirestore.instance.collection('farms').snapshots().listen((_) {
+        _pushMapUpdate();
+      });
+    }
+
+    _complaintsSubscription = FirebaseFirestore.instance.collection('complaints').snapshots().listen((_) {
+      _pushMapUpdate();
+    });
+
+    _pushMapUpdate();
+  }
+
+  double? _toDouble(dynamic value) {
+    if (value == null) {
+      return null;
+    }
+    if (value is num) {
+      return value.toDouble();
+    }
+    if (value is String) {
+      return double.tryParse(value);
+    }
+    return null;
+  }
+
+  Map<String, dynamic>? _normalizeFarm(Map<String, dynamic> source, {String? id}) {
+    final lat = _toDouble(source['lat']);
+    final lng = _toDouble(source['lng']);
+    if (lat == null || lng == null) {
+      return null;
+    }
+
+    final farm = Map<String, dynamic>.from(source);
+    if (id != null) {
+      farm['id'] = id;
+    }
+    farm['lat'] = lat;
+    farm['lng'] = lng;
+    return farm;
+  }
+
+  Map<String, dynamic>? _normalizeComplaint(Map<String, dynamic> source, {String? id}) {
+    double? lat = _toDouble(source['lat']);
+    double? lng = _toDouble(source['lng']);
+
+    final location = source['location'];
+    if ((lat == null || lng == null) && location is GeoPoint) {
+      lat = location.latitude;
+      lng = location.longitude;
+    }
+
+    if (lat == null || lng == null) {
+      return null;
+    }
+
+    final complaint = Map<String, dynamic>.from(source);
+    if (id != null) {
+      complaint['id'] = id;
+    }
+    complaint['lat'] = lat;
+    complaint['lng'] = lng;
+    return complaint;
+  }
+
+  Future<void> _pushMapUpdate() async {
+    try {
+      final farms = widget.farms != null && widget.farms!.isNotEmpty
+          ? widget.farms!
+              .map((farm) => _normalizeFarm(farm))
+              .whereType<Map<String, dynamic>>()
+              .toList()
+          : (await FirebaseFirestore.instance.collection('farms').get()).docs
+              .map((doc) => _normalizeFarm(doc.data(), id: doc.id))
+              .whereType<Map<String, dynamic>>()
+              .toList();
+
+      final complaints = (await FirebaseFirestore.instance.collection('complaints').get()).docs
+          .map((doc) => _normalizeComplaint(doc.data(), id: doc.id))
+          .whereType<Map<String, dynamic>>()
+          .toList();
 
       final payload = jsonEncode({'farms': farms, 'complaints': complaints});
+      _latestPayload = payload;
+      _flushLatestPayload();
+    } catch (e) {
+      debugPrint('Error loading map data: $e');
+    }
+  }
 
-      if (kIsWeb) {
-        // Post message to iframe
-        postMessageToIframe(payload);
-      } else {
-        // Inject JS to add markers into the Leaflet map inside WebView
-        final escapedPayload = payload.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
-        final js = '''
+  void _flushLatestPayload() {
+    final payload = _latestPayload;
+    if (payload == null) {
+      return;
+    }
+
+    if (kIsWeb) {
+      postMessageToIframe(payload);
+      return;
+    }
+
+    if (_webViewController == null || !_isMapLoaded) {
+      return;
+    }
+
+    final escapedPayload = payload.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
+    final js = '''
           (function() {
             try {
+              if(!window.farmClusterGroup || !window.complaintHeatLayer || !window.complaintMarkerGroup) {
+                console.warn('GIS layers are not ready yet.');
+                return;
+              }
+
+              window.farmClusterGroup.clearLayers();
+              window.complaintMarkerGroup.clearLayers();
+              window.complaintHeatLayer.clearLayers();
+              
               var data = JSON.parse("$escapedPayload");
               
-              // Create/clear farms layer
-              if (!window.flutterMarkersLayer) {
-                window.flutterMarkersLayer = L.layerGroup().addTo(map);
+              // Process farms with clustering
+              if(data.farms && Array.isArray(data.farms)) {
+                data.farms.forEach(function(f) {
+                  if(f.lat == null || f.lng == null) return;
+                  var color = (f.status === 'Active') ? '#22C55E' : 
+                             (f.status === 'Pending Approval') ? '#F59E0B' : 
+                             (f.status === 'Rejected') ? '#EF4444' : '#9CA3AF';
+                  var m = L.circleMarker([f.lat, f.lng], {
+                    radius: 7,
+                    color: color,
+                    fillColor: color,
+                    fillOpacity: 0.9,
+                    weight: 2
+                  });
+                  
+                  var popup = '<div style="font-size: 12px; max-width: 200px;">' +
+                             '<strong style="color: ' + color + ';">' + (f.name || 'Farm') + '</strong><br/>' + 
+                             '<small>Owner: ' + (f.owner || '') + '</small><br/>' +
+                             '<small>Status: ' + (f.status || '') + '</small><br/>' +
+                             '<button onclick="window.location.href=\\'app://farm/' + (f.id || '') + '\\'"; style="margin-top: 8px; padding: 4px 8px; background-color: ' + color + '; color: white; border: none; border-radius: 4px; cursor: pointer;">VIEW DETAILS</button>' +
+                             '</div>';
+                  m.bindPopup(popup);
+                  window.farmClusterGroup.addLayer(m);
+                });
               }
-              window.flutterMarkersLayer.clearLayers();
               
-              // Add farm markers
-              data.farms.forEach(function(f) {
-                if (!f.lat || !f.lng) return;
-                var color = (f.status === 'Active') ? 'green' : 
-                           (f.status === 'Pending Approval') ? 'orange' : 
-                           (f.status === 'Rejected') ? 'red' : 'gray';
-                var m = L.circleMarker([f.lat, f.lng], {
-                  radius: 7,
-                  color: color,
-                  fillColor: color,
-                  fillOpacity: 0.9
-                }).addTo(window.flutterMarkersLayer);
+              // Process complaints with heatmap + clustering
+              if(data.complaints && Array.isArray(data.complaints)) {
+                var complaintHeatData = [];
+                data.complaints.forEach(function(c) {
+                  if(c.lat == null || c.lng == null) return;
+                  
+                  // Add to heatmap
+                  complaintHeatData.push([c.lat, c.lng, 0.8]);
+                  
+                  // Add to cluster
+                  var cm = L.circleMarker([c.lat, c.lng], {
+                    radius: 6,
+                    color: '#A21CAF',
+                    fillColor: '#A21CAF',
+                    fillOpacity: 0.85,
+                    weight: 2
+                  });
+                  
+                  var popup = '<div style="font-size: 12px; max-width: 200px;">' +
+                             '<b style="color: #A21CAF;">Activity: ' + (c.activityType || 'Unknown') + '</b><br/>' + 
+                             (c.description || 'No description') + '<br/>' +
+                             '<small><i>Location: (' + c.lat.toFixed(4) + ', ' + c.lng.toFixed(4) + ')</i></small>' +
+                             '</div>';
+                  cm.bindPopup(popup);
+                  window.complaintMarkerGroup.addLayer(cm);
+                });
                 
-                var popup = '<div><strong>' + (f.name || '') + '</strong><br/>' +
-                           (f.owner || '') + '<br/><small>' + (f.status || '') +
-                           '</small><br/><button onclick="window.location.href=\\'app://farm/' +
-                           (f.id || '') + '\\'">VIEW MORE DETAILS</button></div>';
-                m.bindPopup(popup);
-              });
-              
-              // Create/clear complaints layer
-              if (!window.flutterComplaintsLayer) {
-                window.flutterComplaintsLayer = L.layerGroup().addTo(map);
+                // Add heatmap visualization
+                if(complaintHeatData.length > 0) {
+                  var heatLayer = L.heatLayer(complaintHeatData, {
+                    radius: 25,
+                    blur: 15,
+                    maxZoom: 13,
+                    gradient: {
+                      0.0: '#0000FF',
+                      0.4: '#00FF00',
+                      0.6: '#FFFF00',
+                      1.0: '#FF0000'
+                    }
+                  }).addTo(window.complaintHeatLayer);
+                }
               }
-              window.flutterComplaintsLayer.clearLayers();
-              
-              // Add complaint markers
-              data.complaints.forEach(function(c) {
-                if (!c.lat || !c.lng) return;
-                var cm = L.circleMarker([c.lat, c.lng], {
-                  radius: 6,
-                  color: 'purple',
-                  fillColor: 'purple',
-                  fillOpacity: 0.8
-                }).addTo(window.flutterComplaintsLayer);
-                cm.bindPopup('<b>Activity:</b> ' + (c.activityType || '') + '<br/>' + (c.description || ''));
-              });
             } catch (e) {
               console.error('Error injecting markers:', e);
             }
           })();
         ''';
 
-        await _webViewController.runJavaScript(js);
-      }
-    } catch (e) {
-      debugPrint('Error loading map data: $e');
-    }
+          _webViewController!.runJavaScript(js);
   }
 
   @override
@@ -172,6 +302,18 @@ class _GisMapViewState extends State<GisMapView> {
     }
 
     // On mobile/desktop, use WebView
+    if (_webViewController == null) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('GIS Map - Aquaculture Management'),
+          backgroundColor: Colors.blueGrey.shade900,
+          leading: widget.showBackButton ? CustomBackButton(onPressed: () => Navigator.pop(context)) : null,
+          elevation: 0,
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('GIS Map - Aquaculture Management'),
@@ -193,11 +335,11 @@ class _GisMapViewState extends State<GisMapView> {
         ],
         elevation: 0,
       ),
-      body: WebViewWidget(controller: _webViewController),
+      body: WebViewWidget(controller: _webViewController!),
       floatingActionButton: _isMapLoaded
           ? FloatingActionButton(
               onPressed: () {
-                _webViewController.reload();
+                _webViewController!.reload();
               },
               backgroundColor: Colors.blueGrey.shade900,
               child: const Icon(Icons.refresh),

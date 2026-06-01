@@ -13,6 +13,8 @@
         <link rel="stylesheet" href="css/fontawesome-all.min.css">
         <link rel="stylesheet" href="css/leaflet.photon.css">
         <link rel="stylesheet" href="css/leaflet-measure.css">
+        <link rel="stylesheet" href="css/MarkerCluster.css">
+        <link rel="stylesheet" href="css/MarkerCluster.Default.css">
         <style>
         html, body, #map {
             width: 100%;
@@ -39,6 +41,8 @@
         <script src="js/labels.js"></script>
         <script src="js/leaflet.photon.js"></script>
         <script src="js/leaflet-measure.js"></script>
+        <script src="js/leaflet.markercluster.js"></script>
+        <script src="js/leaflet-heat.js"></script>
         <script>
         var highlightLayer;
         function highlightFeature(e) {
@@ -216,7 +220,36 @@
                                               {pane: 'pane_Eastwardseawatervelocity_7'});
         bounds_group.addLayer(layer_Eastwardseawatervelocity_7);
         map.addLayer(layer_Eastwardseawatervelocity_7);
+        
+        // Initialize dynamic layers for farms and complaints BEFORE overlaysTree
+        var farmClusterGroup = L.markerClusterGroup({
+            maxClusterRadius: 80,
+            disableClusteringAtZoom: 16
+        }).addTo(map);
+        
+        var complaintHeatLayer = L.layerGroup().addTo(map);
+        
+        var complaintMarkerGroup = L.markerClusterGroup({
+            maxClusterRadius: 60,
+            disableClusteringAtZoom: 15,
+            iconCreateFunction: function(cluster) {
+                var count = cluster.getChildCount();
+                return L.divIcon({
+                    html: '<div style="background-color: #E11D48; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid white; font-size: 14px;">' + count + '</div>',
+                    iconSize: [40, 40]
+                });
+            }
+        }).addTo(map);
+        
+        // Store globally for later access
+        window.farmClusterGroup = farmClusterGroup;
+        window.complaintHeatLayer = complaintHeatLayer;
+        window.complaintMarkerGroup = complaintMarkerGroup;
+        
         var overlaysTree = [
+            {label: "🌾 Farm Clusters", layer: farmClusterGroup},
+            {label: "🚨 Complaint Hotspots (Heatmap)", layer: complaintHeatLayer},
+            {label: "🚨 Complaint Clusters", layer: complaintMarkerGroup},
             {label: "Eastward sea water velocity", layer: layer_Eastwardseawatervelocity_7},
             {label: "Westward sea water velocity", layer: layer_Westwardseawatervelocity_6},
             {label: "Bathymetry(Ocean Depth)", layer: layer_BathymetryOceanDepth_5},
@@ -248,21 +281,35 @@
                     var data = (typeof e.data === 'string') ? JSON.parse(e.data) : e.data;
                     if (!data) return;
 
-                    // Ensure marker layers exist
-                    if(!window.flutterMarkersLayer){ window.flutterMarkersLayer = L.layerGroup().addTo(map); }
-                    if(!window.flutterComplaintsLayer){ window.flutterComplaintsLayer = L.layerGroup().addTo(map); }
+                    // Clear existing layers (they're already initialized)
+                    farmClusterGroup.clearLayers();
+                    complaintMarkerGroup.clearLayers();
+                    complaintHeatLayer.clearLayers();
 
-                    window.flutterMarkersLayer.clearLayers();
-                    window.flutterComplaintsLayer.clearLayers();
-
+                    // Process farms with clustering
                     if (data.farms && Array.isArray(data.farms)) {
                         data.farms.forEach(function(f){
                             if(!f.lat || !f.lng) return;
-                            var color = (f.status === 'Active')? 'green' : (f.status === 'Pending Approval'? 'orange' : (f.status === 'Rejected'? 'red' : 'gray'));
-                            var m = L.circleMarker([f.lat, f.lng], {radius:7, color: color, fillColor: color, fillOpacity:0.9}).addTo(window.flutterMarkersLayer);
+                            var color = (f.status === 'Active')? '#22C55E' : 
+                                       (f.status === 'Pending Approval')? '#F59E0B' : 
+                                       (f.status === 'Rejected')? '#EF4444' : '#9CA3AF';
+                            
+                            var m = L.circleMarker([f.lat, f.lng], {
+                                radius: 7, 
+                                color: color, 
+                                fillColor: color, 
+                                fillOpacity: 0.9,
+                                weight: 2
+                            });
+                            
                             var btnId = 'openFarm-' + (f.id||Math.random().toString(36).substr(2,5));
-                            var popup = '<div><strong>' + (f.name||'') + '</strong><br/>' + (f.owner||'') + '<br/><small>' + (f.status||'') + '</small><br/><button id="' + btnId + '">VIEW MORE DETAILS</button></div>';
-                            m.bindPopup(popup);
+                            var popupContent = '<div style="font-size: 12px; max-width: 200px;">' +
+                                '<strong style="color: ' + color + ';">' + (f.name||'Farm') + '</strong><br/>' + 
+                                '<small>Owner: ' + (f.owner||'') + '</small><br/>' +
+                                '<small>Status: ' + (f.status||'') + '</small><br/>' +
+                                '<button id="' + btnId + '" style="margin-top: 8px; padding: 4px 8px; background-color: ' + color + '; color: white; border: none; border-radius: 4px; cursor: pointer;">VIEW DETAILS</button>' +
+                                '</div>';
+                            m.bindPopup(popupContent);
                             m.on('popupopen', function(){
                                 var btn = document.getElementById(btnId);
                                 if(btn){
@@ -277,15 +324,53 @@
                                     };
                                 }
                             });
+                            
+                            farmClusterGroup.addLayer(m);
                         });
                     }
 
+                    // Process complaints with heatmap + clustering
                     if (data.complaints && Array.isArray(data.complaints)) {
+                        var complaintHeatData = [];
                         data.complaints.forEach(function(c){
                             if(!c.lat || !c.lng) return;
-                            var cm = L.circleMarker([c.lat,c.lng],{radius:6, color:'purple', fillColor:'purple', fillOpacity:0.8}).addTo(window.flutterComplaintsLayer);
-                            cm.bindPopup('<b>Activity:</b> '+(c.activityType||'') + '<br/>' + (c.description||''));
+                            
+                            // Add to heatmap data
+                            complaintHeatData.push([c.lat, c.lng, 0.8]);
+                            
+                            // Create complaint marker
+                            var cm = L.circleMarker([c.lat, c.lng], {
+                                radius: 6, 
+                                color: '#A21CAF', 
+                                fillColor: '#A21CAF', 
+                                fillOpacity: 0.85,
+                                weight: 2
+                            });
+                            
+                            var popupContent = '<div style="font-size: 12px; max-width: 200px;">' +
+                                '<b style="color: #A21CAF;">Activity: ' + (c.activityType||'Unknown') + '</b><br/>' + 
+                                (c.description||'No description') + '<br/>' +
+                                '<small><i>Reported at: (' + c.lat.toFixed(4) + ', ' + c.lng.toFixed(4) + ')</i></small>' +
+                                '</div>';
+                            cm.bindPopup(popupContent);
+                            
+                            complaintMarkerGroup.addLayer(cm);
                         });
+                        
+                        // Add heatmap layer for complaints density
+                        if(complaintHeatData.length > 0) {
+                            var heatLayer = L.heatLayer(complaintHeatData, {
+                                radius: 25,
+                                blur: 15,
+                                maxZoom: 13,
+                                gradient: {
+                                    0.0: '#0000FF',
+                                    0.4: '#00FF00',
+                                    0.6: '#FFFF00',
+                                    1.0: '#FF0000'
+                                }
+                            }).addTo(complaintHeatLayer);
+                        }
                     }
                 } catch(err) {
                     console.error('Error processing message from Flutter:', err);
