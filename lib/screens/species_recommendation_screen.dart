@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_database/firebase_database.dart';
 import '../services/species_prediction_service.dart';
 
 class SpeciesRecommendationScreen extends StatefulWidget {
@@ -59,8 +59,8 @@ class _SpeciesRecommendationScreenState extends State<SpeciesRecommendationScree
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
       ),
-      body: StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance.collection('water_parameters').doc('2pBQE1SbutGXrRT6NjjA').snapshots(),
+      body: StreamBuilder<DatabaseEvent>(
+        stream: FirebaseDatabase.instance.ref('sensors').onValue,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -75,12 +75,12 @@ class _SpeciesRecommendationScreenState extends State<SpeciesRecommendationScree
           double currentSalinity = 10.0;
           double currentTurbidity = 25.0;
 
-          if (snapshot.hasData && snapshot.data!.exists) {
-            final data = snapshot.data!.data() as Map<String, dynamic>;
-            currentTemp = double.tryParse(data['temperature']?.toString() ?? '28.0') ?? 28.0;
-            currentPh = double.tryParse((data['pH'] ?? data['ph'])?.toString() ?? '7.5') ?? 7.5;
-            currentSalinity = double.tryParse(data['salinity']?.toString() ?? '10.0') ?? 10.0;
-            currentTurbidity = double.tryParse(data['turbidity']?.toString() ?? '25.0') ?? 25.0;
+          if (snapshot.hasData && snapshot.data!.snapshot.value != null) {
+            final data = Map<dynamic, dynamic>.from(snapshot.data!.snapshot.value as Map);
+            currentTemp = (data['temperature'] as num?)?.toDouble() ?? 28.0;
+            currentPh = (data['ph'] as num?)?.toDouble() ?? 7.5;
+            currentSalinity = (data['salinity'] as num?)?.toDouble() ?? 10.0;
+            currentTurbidity = (data['turbidity'] as num?)?.toDouble() ?? 25.0;
           }
 
           return SingleChildScrollView(

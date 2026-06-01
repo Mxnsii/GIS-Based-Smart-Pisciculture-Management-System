@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'dart:async';
+import 'package:firebase_database/firebase_database.dart';
 import 'gis_map_view.dart';
 import '../widgets/custom_back_button.dart';
 
@@ -18,6 +20,43 @@ class FarmDetailsScreen extends StatefulWidget {
 class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
   String _selectedMetric = 'Temperature'; // Default metric
   final List<String> _metrics = ['Temperature', 'pH', 'Turbidity'];
+  final List<Map<String, dynamic>> _sensorHistory = [];
+  StreamSubscription? _sensorSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _sensorSubscription = FirebaseDatabase.instance.ref('sensors').onValue.listen((event) {
+      if (event.snapshot.value != null) {
+        final data = Map<dynamic, dynamic>.from(event.snapshot.value as Map);
+        final timestamp = data['timestamp']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString();
+        
+        // Avoid duplicates in history if the timestamp hasn't changed
+        if (_sensorHistory.isEmpty || _sensorHistory.last['timestamp'] != timestamp) {
+          setState(() {
+            _sensorHistory.add({
+              'temperature': (data['temperature'] as num?)?.toDouble() ?? 0.0,
+              'pH': (data['ph'] as num?)?.toDouble() ?? 0.0,
+              'turbidity': (data['turbidity'] as num?)?.toDouble() ?? 0.0,
+              'timestamp': timestamp,
+            });
+            
+            // Keep only the last 20 elements
+            if (_sensorHistory.length > 20) {
+              _sensorHistory.removeAt(0);
+            }
+          });
+        }
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _sensorSubscription?.cancel();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final String status = (widget.farmData['status'] ?? '').toString();
@@ -331,29 +370,15 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
           const SizedBox(height: 16),
           AspectRatio(
             aspectRatio: 2.5, // Wider aspect ratio for better detail
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('water_parameters')
-                  .orderBy('timestamp', descending: false)
-                  .limit(20) // Limit to relevant recent data for clarity
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                if (snapshot.hasError) {
-                  return Center(child: Text('Error: ${snapshot.error}'));
-                }
-
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            child: Builder(
+              builder: (context) {
+                if (_sensorHistory.isEmpty) {
                   return const Center(child: Text('No data available'));
                 }
 
                 // 1. Process Data
                 List<Map<String, dynamic>> chartData = [];
-                for (var doc in snapshot.data!.docs) {
-                  final data = doc.data() as Map<String, dynamic>;
+                for (var data in _sensorHistory) {
                   double? value;
                   if (_selectedMetric == 'Temperature') {
                     value = (data['temperature'] as num?)?.toDouble();
@@ -366,10 +391,16 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
                   if (value != null) {
                     DateTime? date;
                     if (data['timestamp'] != null) {
-                      if (data['timestamp'] is Timestamp) {
-                         date = (data['timestamp'] as Timestamp).toDate();
-                      } else if (data['timestamp'] is String) {
-                         date = DateTime.tryParse(data['timestamp']);
+                      final tsStr = data['timestamp'].toString();
+                      final tsInt = int.tryParse(tsStr);
+                      if (tsInt != null) {
+                        if (tsInt > 100000000000) {
+                          date = DateTime.fromMillisecondsSinceEpoch(tsInt);
+                        } else {
+                          date = DateTime.now();
+                        }
+                      } else {
+                        date = DateTime.tryParse(tsStr);
                       }
                     }
                     chartData.add({
@@ -400,10 +431,6 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
 
                 // Color Setup
                 Color primaryColor = _getMetricColor();
-                List<Color> gradientColors = [
-                  primaryColor,
-                  primaryColor.withOpacity(0.5),
-                ];
 
                 return LineChart(
                   LineChartData(
@@ -426,7 +453,7 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
                         sideTitles: SideTitles(
                           showTitles: true,
                           reservedSize: 30,
-                          interval: (spots.length / 5).ceilToDouble(), // Dynamic interval
+                          interval: (spots.length / 5).ceilToDouble() > 0 ? (spots.length / 5).ceilToDouble() : 1.0, // Dynamic interval
                           getTitlesWidget: (value, meta) {
                             int index = value.toInt();
                             if (index >= 0 && index < chartData.length) {
@@ -434,7 +461,7 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
                               return Padding(
                                 padding: const EdgeInsets.only(top: 8.0),
                                 child: Text(
-                                  DateFormat('MM/dd').format(date), // e.g. 10/24
+                                  DateFormat('HH:mm:ss').format(date),
                                   style: TextStyle(
                                     color: Colors.grey.shade600,
                                     fontWeight: FontWeight.bold,
@@ -517,7 +544,7 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
                             DateTime date = chartData[flSpot.x.toInt()]['date'];
                             String unit = _getMetricUnit();
                             return LineTooltipItem(
-                              '${DateFormat('MMM d, h:mm a').format(date)}\n',
+                              '${DateFormat('HH:mm:ss').format(date)}\n',
                               const TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.bold,
@@ -527,7 +554,7 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
                                 TextSpan(
                                   text: '${flSpot.y} $unit',
                                   style: TextStyle(
-                                    color: Colors.white, // primaryColor, // Tooltip background is dark usually
+                                    color: Colors.white,
                                     fontWeight: FontWeight.w900,
                                     fontSize: 14,
                                   ),
@@ -544,7 +571,7 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
                     ),
                   ),
                 );
-              },
+              }
             ),
           ),
         ],

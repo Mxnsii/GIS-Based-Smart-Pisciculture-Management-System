@@ -26,7 +26,7 @@ class NavigationDelegate {
 
   final void Function(String)? onPageStarted;
   final void Function(String)? onPageFinished;
-  final void Function(dynamic)? onWebResourceError;
+  final void Function(WebResourceError)? onWebResourceError;
 }
 
 class WebResourceError {

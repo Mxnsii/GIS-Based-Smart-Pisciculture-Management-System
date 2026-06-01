@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_database/firebase_database.dart';
 
 enum AlertSeverity { critical, warning, info }
 
@@ -21,23 +21,21 @@ class AlertsScreen extends StatelessWidget {
           const SizedBox(height: 24),
 
           Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('water_parameters')
-                  .snapshots(),
+            child: StreamBuilder<DatabaseEvent>(
+              stream: FirebaseDatabase.instance.ref('sensors').onValue,
               builder: (context, snapshot) {
 
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                if (!snapshot.hasData || snapshot.data!.snapshot.value == null) {
                   return const Center(
                     child: Text("No sensor data found"),
                   );
                 }
 
-                var doc = snapshot.data!.docs.first;
+                final data = Map<dynamic, dynamic>.from(snapshot.data!.snapshot.value as Map);
 
-                double temp = double.tryParse(doc['temperature']?.toString() ?? '0') ?? 0.0;
-                double ph = double.tryParse((doc['pH'] ?? doc['ph'])?.toString() ?? '0') ?? 0.0;
-                double turbidity = double.tryParse(doc['turbidity']?.toString() ?? '0') ?? 0.0;
+                double temp = (data['temperature'] as num?)?.toDouble() ?? 0.0;
+                double ph = (data['ph'] as num?)?.toDouble() ?? 0.0;
+                double turbidity = (data['turbidity'] as num?)?.toDouble() ?? 0.0;
 
                 List<Widget> alerts = [];
 

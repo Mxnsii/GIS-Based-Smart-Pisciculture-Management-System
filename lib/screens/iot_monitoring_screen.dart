@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'dart:math' as math;
 import '../services/notification_service.dart';
 import '../services/ml_prediction_service.dart';
@@ -83,8 +83,8 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
           ),
           const SizedBox(height: 16),
           Expanded(
-            child: StreamBuilder<DocumentSnapshot>(
-              stream: FirebaseFirestore.instance.collection('water_parameters').doc('2pBQE1SbutGXrRT6NjjA').snapshots(),
+            child: StreamBuilder<DatabaseEvent>(
+              stream: FirebaseDatabase.instance.ref('sensors').onValue,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: Padding(
@@ -97,17 +97,18 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
                   return Center(child: Text("Error: ${snapshot.error}"));
                 }
 
-                if (!snapshot.hasData || !snapshot.data!.exists) {
+                if (!snapshot.hasData || snapshot.data!.snapshot.value == null) {
                   return const Center(child: Text("No sensor data found"));
                 }
 
-                final Map<String, dynamic> values =
-                    snapshot.data!.data() as Map<String, dynamic>;
+                final data = Map<dynamic, dynamic>.from(snapshot.data!.snapshot.value as Map);
 
                 final sensorData = {
-                  "turbidity": double.tryParse(values['turbidity']?.toString() ?? '0') ?? 0.0,
-                  "temperature": double.tryParse(values['temperature']?.toString() ?? '0') ?? 0.0,
-                  "ph": double.tryParse((values['pH'] ?? values['ph'])?.toString() ?? '0') ?? 0.0,
+                  "turbidity": (data['turbidity'] as num?)?.toDouble() ?? 0.0,
+                  "temperature": (data['temperature'] as num?)?.toDouble() ?? 0.0,
+                  "ph": (data['ph'] as num?)?.toDouble() ?? 0.0,
+                  "tds": (data['tds'] as num?)?.toDouble() ?? 0.0,
+                  "salinity": (data['salinity'] as num?)?.toDouble() ?? 0.0,
                 };
 
                 return SingleChildScrollView(
@@ -131,6 +132,8 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
     final double turbidityVal = data['turbidity'];
     final double tempVal = data['temperature'];
     final double phVal = data['ph'];
+    final double tdsVal = data['tds'];
+    final double salinityVal = data['salinity'];
 
     return Card(
       elevation: 3,
@@ -151,8 +154,8 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
                     title: 'Turbidity',
                     value: turbidityVal,
                     min: 0,
-                    max: 40,
-                    unit: ' NTU',
+                    max: 100,
+                    unit: '%',
                     gradientColors: const [Colors.red, Colors.green, Colors.green, Colors.yellow, Colors.orange, Colors.red],
                     gradientStops: const [0.0, 0.49, 0.5, 0.75, 0.8125, 1.0],
                   ),
@@ -173,6 +176,24 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
                     unit: '',
                     gradientColors: const [Colors.red, Colors.red, Colors.red, Colors.yellow, Colors.green, Colors.green, Colors.yellow, Colors.red],
                     gradientStops: const [0.0, 0.49, 0.5, 0.675, 0.73, 0.82, 0.875, 1.0],
+                  ),
+                  SpeedometerGauge(
+                    title: 'TDS',
+                    value: tdsVal,
+                    min: 0,
+                    max: 1000,
+                    unit: ' ppm',
+                    gradientColors: const [Colors.green, Colors.green, Colors.yellow, Colors.orange, Colors.red],
+                    gradientStops: const [0.0, 0.5, 0.6, 0.8, 1.0],
+                  ),
+                  SpeedometerGauge(
+                    title: 'Salinity',
+                    value: salinityVal,
+                    min: 0,
+                    max: 10,
+                    unit: ' ppt',
+                    gradientColors: const [Colors.green, Colors.green, Colors.yellow, Colors.orange, Colors.red],
+                    gradientStops: const [0.0, 0.3, 0.5, 0.8, 1.0],
                   ),
                 ],
               ),

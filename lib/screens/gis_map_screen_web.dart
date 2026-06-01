@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'gis_map_web_view_web.dart';
 
 class GISMapScreen extends StatelessWidget {
   const GISMapScreen({super.key});
@@ -14,5 +13,14 @@ class GISMapScreen extends StatelessWidget {
         child: GISMapWebView(),
       ),
     );
+  }
+}
+
+class GISMapWebView extends StatelessWidget {
+  const GISMapWebView({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const HtmlElementView(viewType: 'gis-map-leaflet-iframe');
   }
 }
