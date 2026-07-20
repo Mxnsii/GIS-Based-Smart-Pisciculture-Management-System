@@ -287,10 +287,10 @@ class DashboardHomeView extends StatelessWidget {
                   _sectionLabel('Quick Stats').animate().fadeIn(delay: 100.ms),
                   const SizedBox(height: 14),
 
-                  // Row 1
-                  Row(
-                    children: [
-                      StatCard(
+                  // Symmetrical Stat Cards Layout
+                  Builder(
+                    builder: (context) {
+                      final registeredFarmsCard = StatCard(
                         title: 'REGISTERED FARMS',
                         valueWidget: Text('4',
                             style: GoogleFonts.inter(
@@ -299,9 +299,9 @@ class DashboardHomeView extends StatelessWidget {
                         accentColor: AppColors.primary,
                         subtitle: 'Active aquaculture sites',
                         onTap: () => onTabChange(2),
-                      ),
-                      const SizedBox(width: 14),
-                      StatCard(
+                      );
+
+                      final crzFarmsCard = StatCard(
                         title: 'FARMS IN CRZ ZONE',
                         valueWidget: Row(
                           crossAxisAlignment: CrossAxisAlignment.end,
@@ -322,15 +322,9 @@ class DashboardHomeView extends StatelessWidget {
                         accentColor: AppColors.danger,
                         subtitle: 'Coastal regulation zone',
                         onTap: () => onTabChange(1),
-                      ),
-                    ],
-                  ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.1),
-                  const SizedBox(height: 14),
+                      );
 
-                  // Row 2
-                  Row(
-                    children: [
-                      StatCard(
+                      final totalComplaintsCard = StatCard(
                         title: 'TOTAL COMPLAINTS',
                         valueWidget: StreamBuilder<QuerySnapshot>(
                           stream: FirebaseFirestore.instance.collection('complaints').snapshots(),
@@ -351,21 +345,43 @@ class DashboardHomeView extends StatelessWidget {
                         accentColor: AppColors.warning,
                         subtitle: 'Pending review',
                         onTap: () => onTabChange(3),
-                      ),
-                      const SizedBox(width: 14),
-                      StatCard(
-                        title: 'WATER QUALITY',
-                        valueWidget: Text('Optimal',
-                            style: GoogleFonts.inter(
-                                color: AppColors.success,
-                                fontSize: 24,
-                                fontWeight: FontWeight.w800)),
-                        icon: Icons.water_drop_rounded,
-                        accentColor: AppColors.success,
-                        subtitle: 'All parameters stable',
-                      ),
-                    ],
-                  ).animate().fadeIn(delay: 300.ms).slideY(begin: 0.1),
+                      );
+
+                      return LayoutBuilder(
+                        builder: (context, constraints) {
+                          if (constraints.maxWidth >= 600) {
+                            return Row(
+                              children: [
+                                registeredFarmsCard,
+                                const SizedBox(width: 14),
+                                crzFarmsCard,
+                                const SizedBox(width: 14),
+                                totalComplaintsCard,
+                              ],
+                            );
+                          } else {
+                            return Column(
+                              children: [
+                                Row(
+                                  children: [
+                                    registeredFarmsCard,
+                                    const SizedBox(width: 14),
+                                    crzFarmsCard,
+                                  ],
+                                ),
+                                const SizedBox(height: 14),
+                                Row(
+                                  children: [
+                                    totalComplaintsCard,
+                                  ],
+                                ),
+                              ],
+                            );
+                          }
+                        },
+                      );
+                    }
+                  ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.1),
 
                   const SizedBox(height: 150),
                 ],

@@ -49,6 +49,8 @@ dependencies:
   lottie: ^3.3.3
   file_picker: ^11.0.2
   flutter_tts: ^4.2.5
+  webview_flutter: ^4.7.0
+
 
 
 dev_dependencies:

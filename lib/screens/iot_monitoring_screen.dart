@@ -9,6 +9,7 @@ import '../widgets/weather_widget.dart';
 import '../widgets/ocean_glass_card.dart';
 import '../widgets/app_card.dart';
 import '../theme/app_theme.dart';
+import '../services/alert_state.dart';
 
 class IotMonitoringScreen extends StatefulWidget {
   const IotMonitoringScreen({super.key});
@@ -24,11 +25,10 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
     "Catfish": "",
     "Milkfish": "",
   };
-  static final Set<String> _acknowledgedAlerts = {};
 
   void _checkAndAlert(int riskLevel, BuildContext context, String species, String disease) {
-    final alertKey = "$species-$disease";
-    if (riskLevel > 0 && !_acknowledgedAlerts.contains(alertKey) && _lastAlertedIssues[species] != disease) {
+    final alertKey = "$species-risk";
+    if (riskLevel > 0 && !AlertState.isAcknowledged(alertKey) && _lastAlertedIssues[species] != disease) {
       _lastAlertedIssues[species] = disease;
       NotificationService.showNotification(
         id: species.hashCode,
@@ -74,9 +74,7 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
                   foregroundColor: Colors.white,
                 ),
                 onPressed: () {
-                  setState(() {
-                    _acknowledgedAlerts.add(alertKey);
-                  });
+                  AlertState.acknowledge(alertKey);
                   Navigator.of(ctx).pop();
                 },
                 child: const Text('Acknowledge'),
@@ -88,7 +86,7 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
     } else if (riskLevel == 0) {
       _lastAlertedIssues[species] = "";
       // Reset acknowledgment when returning to healthy state
-      _acknowledgedAlerts.removeWhere((key) => key.startsWith("$species-"));
+      AlertState.reset(alertKey);
     }
   }
 
@@ -110,12 +108,15 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
                   const SizedBox(height: 24),
                   _buildSectionHeader().animate().fadeIn(delay: 200.ms),
                   const SizedBox(height: 16),
-                  StreamBuilder<DocumentSnapshot>(
-                    stream: FirebaseFirestore.instance
-                        .collection('water_parameters')
-                        .doc('2pBQE1SbutGXrRT6NjjA')
-                        .snapshots(),
-                    builder: (context, snapshot) {
+                  ValueListenableBuilder<int>(
+                    valueListenable: AlertState.alertNotifier,
+                    builder: (context, _, __) {
+                      return StreamBuilder<DocumentSnapshot>(
+                        stream: FirebaseFirestore.instance
+                            .collection('water_parameters')
+                            .doc('2pBQE1SbutGXrRT6NjjA')
+                            .snapshots(),
+                        builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting) {
                         return Center(
                           child: Padding(
@@ -137,8 +138,10 @@ class _IotMonitoringScreenState extends State<IotMonitoringScreen> {
                       };
                       return _buildSensorCard(sensorData).animate().fadeIn(delay: 300.ms).slideY(begin: 0.1);
                     },
-                  ),
-                  const SizedBox(height: 150),
+                  );
+                },
+              ),
+              const SizedBox(height: 150),
                 ],
               ),
             ),
